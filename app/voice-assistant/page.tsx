@@ -312,9 +312,9 @@ export default function VoiceAssistant() {
                 onClick={startRecording}
                 disabled={isProcessing}
                 size="lg"
-                className="w-32"
+                className="w-32 px-2"
               >
-                <Mic className="mr-2 h-4 w-4" />
+                <Mic className="w-4 h-4 mr-2" strokeWidth={2} />
                 Record
               </Button>
               <Button
@@ -322,9 +322,9 @@ export default function VoiceAssistant() {
                 disabled={isProcessing}
                 variant="outline"
                 size="lg"
-                className="w-32"
+                className="w-32 px-2"
               >
-                <Upload className="mr-2 h-4 w-4" />
+                <Upload className="w-4 h-4 mr-2" strokeWidth={2} />
                 Upload
               </Button>
               <input
