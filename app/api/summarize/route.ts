@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Initialize Deepseek client
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL;
 
 export async function POST(request: Request) {
   try {
@@ -44,19 +43,35 @@ export async function POST(request: Request) {
       );
     }
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "Create a concise summary of the following text.",
-        },
-        {
-          role: "user",
-          content: text,
-        },
-      ],
+    // Call Deepseek API for summarization
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: "Create a concise summary of the following text.",
+          },
+          {
+            role: "user",
+            content: text,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 2048,
+      }),
     });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate summary with Deepseek");
+    }
+
+    const completion = await response.json();
 
     // Update credits
     const { data: updatedCredits, error: updateError } = await supabase
