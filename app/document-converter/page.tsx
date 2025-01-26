@@ -154,41 +154,65 @@ export default function DocumentConverter() {
 
   const transcribe = async () => {
     if (!selectedFile) return;
-    setIsProcessing(true);
 
     try {
+      // Calculate total required credits first
+      const totalRequiredCredits = getRemainingCost("transcribe");
+
+      // Check if user has enough credits before starting
+      const response = await fetch("/api/check-credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
+      });
+
+      const data = await response.json();
+      if (response.status === 402) {
+        setInsufficientCreditsData({
+          required: totalRequiredCredits,
+          available: data.available,
+        });
+        setShowInsufficientCreditsModal(true);
+        return;
+      }
+
+      setIsProcessing(true);
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      const response = await fetch("/api/process-document", {
+      const response2 = await fetch("/api/process-document", {
         method: "POST",
         body: formData,
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 402) {
+      const data2 = await response2.json();
+      if (!response2.ok) {
+        if (response2.status === 402) {
           setInsufficientCreditsData({
-            required: data.required,
-            available: data.available,
+            required: data2.required,
+            available: data2.available,
           });
           setShowInsufficientCreditsModal(true);
           return;
         }
-        throw new Error(data.error || "Failed to process document");
+        throw new Error(data2.error || "Failed to process document");
       }
 
-      setResult({ text: data.text });
+      setResult({ text: data2.text });
       creditsEvent.emit();
 
       // Show toast with credits deducted
       toast({
         title: "Operation Complete",
-        description: `${data.creditsDeducted} credits were deducted from your account`,
+        description: `${data2.creditsDeducted} credits were deducted from your account`,
       });
     } catch (error: any) {
       console.error("Error processing document:", error);
-      alert(error.message || "Error processing document. Please try again.");
+      toast({
+        title: "Error",
+        description: error.message || "Failed to process document",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -196,6 +220,26 @@ export default function DocumentConverter() {
 
   const handleGenerateSpeech = async (mode: "full" | "summary") => {
     try {
+      // Calculate total required credits first
+      const totalRequiredCredits = getRemainingCost(mode);
+
+      // Check if user has enough credits before starting
+      const response = await fetch("/api/check-credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
+      });
+
+      const data = await response.json();
+      if (response.status === 402) {
+        setInsufficientCreditsData({
+          required: totalRequiredCredits,
+          available: data.available,
+        });
+        setShowInsufficientCreditsModal(true);
+        return;
+      }
+
       let currentText = result?.text;
       let summaryText = result?.summary;
       let totalCreditsDeducted = 0;
@@ -206,23 +250,6 @@ export default function DocumentConverter() {
         const formData = new FormData();
         formData.append("file", selectedFile!);
 
-        // Get cost estimate from backend first
-        const costResponse = await fetch("/api/estimate-cost", {
-          method: "POST",
-          body: formData,
-        });
-
-        const costData = await costResponse.json();
-        if (costResponse.status === 402) {
-          setInsufficientCreditsData({
-            required: Math.ceil(costData.required),
-            available: Math.floor(costData.available),
-          });
-          setShowInsufficientCreditsModal(true);
-          return;
-        }
-
-        // If user has enough credits, proceed with processing
         const response = await fetch("/api/process-document", {
           method: "POST",
           body: formData,
@@ -259,8 +286,8 @@ export default function DocumentConverter() {
         if (!summaryResponse.ok) {
           if (summaryResponse.status === 402) {
             setInsufficientCreditsData({
-              required: Math.ceil(summaryData.required),
-              available: Math.floor(summaryData.available),
+              required: summaryData.required,
+              available: summaryData.available,
             });
             setShowInsufficientCreditsModal(true);
             return;
@@ -319,8 +346,12 @@ export default function DocumentConverter() {
         description: `${totalCreditsDeducted} credits were deducted from your account`,
       });
     } catch (error: any) {
-      console.error("Error in speech generation:", error);
-      alert(error.message || "Error generating speech. Please try again.");
+      console.error("Error in speech generation chain:", error);
+      toast({
+        title: "Error",
+        description: error.message || "An error occurred during processing",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false);
       setIsSummaryLoading(false);
