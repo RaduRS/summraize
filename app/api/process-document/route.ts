@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import OpenAI from "openai";
-import * as pdfjsLib from "pdfjs-dist";
+import { estimateCosts } from "@/utils/cost-calculator";
+import { extractTextFromPDF } from "@/utils/pdf";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -15,30 +16,6 @@ const encoder = new TextEncoder();
 
 // export const maxDuration = 300;
 // export const dynamic = "force-dynamic";
-
-async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  try {
-    // Set up the worker source
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
-    // Load the PDF document
-    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-    let text = "";
-
-    // Extract text from each page
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const strings = content.items.map((item: any) => item.str);
-      text += strings.join(" ") + "\n";
-    }
-
-    return text;
-  } catch (error) {
-    console.error("PDF Error:", error);
-    throw new Error("Failed to extract text from PDF");
-  }
-}
 
 async function extractTextFromImage(buffer: Buffer): Promise<string> {
   try {
@@ -88,7 +65,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const file = formData.get("file") as File;
     const mode = formData.get("mode") as string | null;
 
     if (!file) {
@@ -106,25 +83,92 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    let extractedText = "";
+    let text = "";
 
     if (file.type === "application/pdf") {
-      extractedText = await extractTextFromPDF(buffer);
+      try {
+        console.log("Processing PDF file:", file.name);
+        // Forward to dedicated PDF endpoint
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch(new URL("/api/process-pdf", request.url), {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to process PDF");
+        }
+
+        text = data.text;
+        console.log("PDF text extracted, length:", text.length);
+      } catch (error) {
+        console.error("PDF processing error:", error);
+        throw new Error("Failed to process PDF document");
+      }
     } else if (file.type.startsWith("image/")) {
-      extractedText = await extractTextFromImage(buffer);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      text = await extractTextFromImage(buffer);
     } else if (file.type === "text/plain") {
-      extractedText = buffer.toString("utf-8");
+      text = await file.text();
+    } else {
+      text = await file.text();
     }
 
     // Clean up the text formatting
-    const cleanText = extractedText
+    const cleanText = text
       .replace(/([a-z])([A-Z])/g, "$1 $2") // Add space between camelCase
       .replace(/\s+/g, " ") // Normalize spaces
       .trim();
 
-    return NextResponse.json({ text: cleanText });
+    // When actually processing and charging
+    const wordCount = cleanText.trim().split(/\s+/).length;
+    const actualCost = Math.ceil(
+      estimateCosts({
+        textLength: wordCount,
+      }).total
+    );
+
+    // Check if user has enough credits for actual cost
+    const { data: credits } = await supabase
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!credits) {
+      return NextResponse.json(
+        { error: "No credits found for user" },
+        { status: 404 }
+      );
+    }
+
+    if (credits.credits < actualCost) {
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          required: actualCost,
+          available: credits.credits,
+        },
+        { status: 402 }
+      );
+    }
+
+    // Deduct actual cost based on real word count
+    await supabase.rpc("deduct_credits", {
+      amount: actualCost,
+      user_id: user.id,
+    });
+
+    return NextResponse.json({
+      text: cleanText,
+      wordCount,
+      cost: actualCost,
+    });
   } catch (error: any) {
+    console.error("Error processing document:", error);
     return NextResponse.json(
       { error: error.message || "Failed to process request" },
       { status: 500 }
