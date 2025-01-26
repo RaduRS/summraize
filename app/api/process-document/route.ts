@@ -156,16 +156,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Deduct actual cost based on real word count
-    await supabase.rpc("deduct_credits", {
-      amount: actualCost,
-      user_id: user.id,
-    });
+    // Update credits
+    const { data: updatedCredits, error: updateError } = await supabase
+      .from("user_credits")
+      .update({ credits: credits.credits - actualCost })
+      .eq("user_id", user.id)
+      .select("credits")
+      .single();
+
+    if (updateError) {
+      throw new Error("Failed to update credits");
+    }
+
+    // Calculate credits deducted
+    const creditsDeducted = credits.credits - updatedCredits.credits;
 
     return NextResponse.json({
       text: cleanText,
       wordCount,
-      cost: actualCost,
+      creditsDeducted,
     });
   } catch (error: any) {
     console.error("Error processing document:", error);

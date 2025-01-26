@@ -14,6 +14,8 @@ import {
 import { CostButton } from "@/components/cost-button";
 import { estimateCosts } from "@/utils/cost-calculator";
 import { creditsEvent } from "@/lib/credits-event";
+import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProcessingResult {
   text: string;
@@ -39,6 +41,7 @@ interface FileAnalysis {
 }
 
 export default function DocumentConverter() {
+  const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [isTtsLoading, setIsTtsLoading] = useState(false);
@@ -51,6 +54,12 @@ export default function DocumentConverter() {
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
   const [fileAnalysis, setFileAnalysis] = useState<FileAnalysis | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showInsufficientCreditsModal, setShowInsufficientCreditsModal] =
+    useState(false);
+  const [insufficientCreditsData, setInsufficientCreditsData] = useState<{
+    required: number;
+    available: number;
+  } | null>(null);
 
   const analyzeFile = async (file: File) => {
     try {
@@ -158,11 +167,25 @@ export default function DocumentConverter() {
 
       const data = await response.json();
       if (!response.ok) {
+        if (response.status === 402) {
+          setInsufficientCreditsData({
+            required: data.required,
+            available: data.available,
+          });
+          setShowInsufficientCreditsModal(true);
+          return;
+        }
         throw new Error(data.error || "Failed to process document");
       }
 
       setResult({ text: data.text });
       creditsEvent.emit();
+
+      // Show toast with credits deducted
+      toast({
+        title: "Operation Complete",
+        description: `${data.creditsDeducted} credits were deducted from your account`,
+      });
     } catch (error: any) {
       console.error("Error processing document:", error);
       alert(error.message || "Error processing document. Please try again.");
@@ -175,6 +198,7 @@ export default function DocumentConverter() {
     try {
       let currentText = result?.text;
       let summaryText = result?.summary;
+      let totalCreditsDeducted = 0;
 
       // First transcribe if needed
       if (!currentText) {
@@ -190,9 +214,11 @@ export default function DocumentConverter() {
 
         const costData = await costResponse.json();
         if (costResponse.status === 402) {
-          alert(
-            `Insufficient credits.\nRequired: ${Math.ceil(costData.required)}\nAvailable: ${Math.floor(costData.available)}`
-          );
+          setInsufficientCreditsData({
+            required: Math.ceil(costData.required),
+            available: Math.floor(costData.available),
+          });
+          setShowInsufficientCreditsModal(true);
           return;
         }
 
@@ -204,12 +230,20 @@ export default function DocumentConverter() {
 
         const data = await response.json();
         if (!response.ok) {
+          if (response.status === 402) {
+            setInsufficientCreditsData({
+              required: data.required,
+              available: data.available,
+            });
+            setShowInsufficientCreditsModal(true);
+            return;
+          }
           throw new Error(data.error || "Failed to process document");
         }
 
         currentText = data.text;
         setResult({ text: data.text });
-        creditsEvent.emit();
+        totalCreditsDeducted += data.creditsDeducted;
       }
 
       // Generate summary if needed
@@ -224,9 +258,11 @@ export default function DocumentConverter() {
         const summaryData = await summaryResponse.json();
         if (!summaryResponse.ok) {
           if (summaryResponse.status === 402) {
-            alert(
-              `Insufficient credits.\nCost: ${Math.ceil(summaryData.required)} credits\nAvailable: ${Math.floor(summaryData.available)} credits`
-            );
+            setInsufficientCreditsData({
+              required: Math.ceil(summaryData.required),
+              available: Math.floor(summaryData.available),
+            });
+            setShowInsufficientCreditsModal(true);
             return;
           }
           throw new Error(summaryData.error || "Failed to generate summary");
@@ -235,11 +271,11 @@ export default function DocumentConverter() {
         setResult((prev) =>
           prev ? { ...prev, summary: summaryData.summary } : null
         );
+        totalCreditsDeducted += summaryData.creditsDeducted;
       }
 
       // Use the appropriate text for speech
       const textToSpeak = mode === "summary" ? summaryText : currentText;
-
       if (!textToSpeak) {
         throw new Error("No text available for speech generation");
       }
@@ -257,9 +293,11 @@ export default function DocumentConverter() {
       const ttsData = await ttsResponse.json();
       if (!ttsResponse.ok) {
         if (ttsResponse.status === 402) {
-          alert(
-            `Insufficient credits.\nCost: ${Math.ceil(ttsData.required)} credits\nAvailable: ${Math.floor(ttsData.available)} credits`
-          );
+          setInsufficientCreditsData({
+            required: ttsData.required,
+            available: ttsData.available,
+          });
+          setShowInsufficientCreditsModal(true);
           return;
         }
         throw new Error(ttsData.error || "Failed to generate speech");
@@ -271,7 +309,15 @@ export default function DocumentConverter() {
       } else {
         setFullTextAudioUrl(ttsData.audioUrl);
       }
+
+      totalCreditsDeducted += ttsData.creditsDeducted;
       creditsEvent.emit();
+
+      // Show a single toast with total credits deducted
+      toast({
+        title: `${mode === "summary" ? "Summary" : "Full Text"} Generated`,
+        description: `${totalCreditsDeducted} credits were deducted from your account`,
+      });
     } catch (error: any) {
       console.error("Error in speech generation:", error);
       alert(error.message || "Error generating speech. Please try again.");
@@ -479,6 +525,12 @@ export default function DocumentConverter() {
           </div>
         )}
       </div>
+      <InsufficientCreditsModal
+        isOpen={showInsufficientCreditsModal}
+        onClose={() => setShowInsufficientCreditsModal(false)}
+        requiredCredits={insufficientCreditsData?.required || 0}
+        availableCredits={insufficientCreditsData?.available || 0}
+      />
     </div>
   );
 }

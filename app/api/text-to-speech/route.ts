@@ -73,16 +73,19 @@ export async function POST(request: Request) {
     }
 
     // Deduct credits
-    const { error: updateError } = await supabase
+    const { data: updatedCredits, error: updateError } = await supabase
       .from("user_credits")
-      .update({
-        credits: credits.credits - costs.total,
-      })
-      .eq("user_id", user.id);
+      .update({ credits: credits.credits - costs.total })
+      .eq("user_id", user.id)
+      .select("credits")
+      .single();
 
     if (updateError) {
       throw new Error("Failed to update credits");
     }
+
+    // Calculate credits deducted
+    const creditsDeducted = credits.credits - updatedCredits.credits;
 
     // Generate speech using OpenAI TTS
     const mp3 = await openai.audio.speech.create({
@@ -114,7 +117,10 @@ export async function POST(request: Request) {
       throw new Error("Failed to generate signed URL");
     }
 
-    return NextResponse.json({ audioUrl: urlData.signedUrl });
+    return NextResponse.json({
+      audioUrl: urlData.signedUrl,
+      creditsDeducted,
+    });
   } catch (error: any) {
     console.error("Error generating speech:", error);
     return NextResponse.json(

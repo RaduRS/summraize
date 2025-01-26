@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import OpenAI from "openai";
 import { File } from "@web-std/file";
+import { estimateCosts } from "@/utils/cost-calculator";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("audio");
+    const duration = Number(formData.get("duration")) || 0; // Get duration from frontend
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -36,6 +38,29 @@ export async function POST(request: Request) {
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Calculate cost based on actual audio duration
+    const costs = estimateCosts({
+      audioLength: duration, // Use actual duration in seconds
+    });
+
+    // Check user credits
+    const { data: credits } = await supabase
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!credits || credits.credits < costs.total) {
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          required: costs.total,
+          available: credits?.credits || 0,
+        },
+        { status: 402 }
+      );
     }
 
     // Upload to Supabase Storage
@@ -74,6 +99,21 @@ export async function POST(request: Request) {
       language: "en",
     });
 
+    // Deduct credits
+    const { data: updatedCredits, error: updateError } = await supabase
+      .from("user_credits")
+      .update({ credits: credits.credits - costs.total })
+      .eq("user_id", user.id)
+      .select("credits")
+      .single();
+
+    if (updateError) {
+      throw new Error("Failed to update credits");
+    }
+
+    // Calculate credits deducted
+    const creditsDeducted = credits.credits - updatedCredits.credits;
+
     // Store the results in the database
     const { error: dbError } = await supabase.from("audio_recordings").insert({
       user_id: user.id,
@@ -88,7 +128,8 @@ export async function POST(request: Request) {
     // Return just what we need
     return NextResponse.json({
       text: transcription.text,
-      audioUrl: URL.createObjectURL(file), // Use local URL for immediate playback
+      audioUrl: signedUrl,
+      creditsDeducted,
     });
   } catch (error: any) {
     console.error("Process audio error:", error);

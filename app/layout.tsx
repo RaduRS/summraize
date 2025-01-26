@@ -9,6 +9,7 @@ import Link from "next/link";
 import { NavigationTabs } from "@/components/navigation-tabs";
 import "./globals.css";
 import { CreditsDisplay } from "@/components/credits-display";
+import { Toaster } from "@/components/ui/toaster";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -64,6 +65,7 @@ export default function RootLayout({
               </footer>
             </div>
           </main>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>
