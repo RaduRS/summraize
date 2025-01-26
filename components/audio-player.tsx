@@ -8,33 +8,62 @@ import { Play, Pause } from "lucide-react";
 interface AudioPlayerProps {
   src: string;
   onError?: () => void;
+  onLoadedMetadata?: (e: React.SyntheticEvent<HTMLAudioElement>) => void;
   className?: string;
+  initialDuration?: number;
 }
 
-export function AudioPlayer({ src, onError, className }: AudioPlayerProps) {
+export function AudioPlayer({
+  src,
+  onError,
+  onLoadedMetadata,
+  className,
+  initialDuration,
+}: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState(initialDuration || 0);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  const formatTime = (time: number) => {
+    if (!time || isNaN(time) || !isFinite(time)) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleDurationChange = () => setDuration(audio.duration);
+    const handleDurationChange = () => {
+      if (
+        audio.duration &&
+        !isNaN(audio.duration) &&
+        isFinite(audio.duration)
+      ) {
+        setDuration(audio.duration);
+      } else {
+        setDuration(initialDuration || 0);
+      }
+    };
     const handleEnded = () => setIsPlaying(false);
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("durationchange", handleDurationChange);
     audio.addEventListener("ended", handleEnded);
 
+    if (initialDuration) {
+      setDuration(initialDuration);
+    }
+
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("durationchange", handleDurationChange);
       audio.removeEventListener("ended", handleEnded);
     };
-  }, []);
+  }, [initialDuration]);
 
   const togglePlayPause = () => {
     if (!audioRef.current) return;
@@ -46,21 +75,28 @@ export function AudioPlayer({ src, onError, className }: AudioPlayerProps) {
     setIsPlaying(!isPlaying);
   };
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  };
-
   const handleSliderChange = (value: number[]) => {
     if (!audioRef.current) return;
     audioRef.current.currentTime = value[0];
     setCurrentTime(value[0]);
   };
 
+  const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLAudioElement>) => {
+    const audio = e.target as HTMLAudioElement;
+    if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+      setDuration(audio.duration);
+    }
+    onLoadedMetadata?.(e);
+  };
+
   return (
     <div className="flex items-center gap-4">
-      <audio ref={audioRef} src={src} onError={onError} />
+      <audio
+        ref={audioRef}
+        src={src}
+        onError={onError}
+        onLoadedMetadata={handleLoadedMetadata}
+      />
 
       <Button
         onClick={togglePlayPause}
