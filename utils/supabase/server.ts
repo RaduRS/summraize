@@ -1,29 +1,31 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 
-export const createClient = async () => {
-  const cookieStore = await cookies();
-
+export const createClient = (request: Request) => {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+        get(name: string) {
+          const cookies = request.headers.get("cookie")?.split(";");
+          if (!cookies) return undefined;
+          const cookie = cookies.find((c) => c.trim().startsWith(`${name}=`));
+          return cookie ? cookie.split("=")[1] : undefined;
         },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-            });
-          } catch (error) {
-            // The `set` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
-          }
+        set(name: string, value: string, options: any) {
+          // Server-side cookie setting not needed for API routes
+        },
+        remove(name: string, options: any) {
+          // Server-side cookie removal not needed for API routes
         },
       },
-    },
+    }
   );
 };
+
+export async function createServerActionClient() {
+  const headersList = await headers();
+  const origin = headersList.get("origin") || "http://localhost:3000";
+  return createClient(new Request(origin, { headers: headersList }));
+}
