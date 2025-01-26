@@ -28,7 +28,9 @@ export function CreditsDisplay() {
   useEffect(() => {
     fetchCredits();
     const unsubscribe = creditsEvent.subscribe(fetchCredits);
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return (
