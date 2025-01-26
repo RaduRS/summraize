@@ -239,35 +239,56 @@ export default function VoiceAssistant() {
 
   const transcribe = async () => {
     if (!audioBlob) return;
-    setIsProcessing(true);
+
     try {
+      // Calculate total required credits first
+      const totalRequiredCredits = getRemainingCost("transcribe");
+
+      // Check if user has enough credits before starting
+      const response = await fetch("/api/check-credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
+      });
+
+      const data = await response.json();
+      if (response.status === 402) {
+        setInsufficientCreditsData({
+          required: totalRequiredCredits,
+          available: data.available,
+        });
+        setShowInsufficientCreditsModal(true);
+        return;
+      }
+
+      setIsProcessing(true);
       const formData = new FormData();
       formData.append("audio", audioBlob, "audio.webm");
       formData.append("duration", audioDuration.toString());
 
-      const response = await fetch("/api/process-audio", {
+      const response2 = await fetch("/api/process-audio", {
         method: "POST",
         body: formData,
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 402) {
+      const data2 = await response2.json();
+      if (!response2.ok) {
+        if (response2.status === 402) {
           setInsufficientCreditsData({
-            required: data.required,
-            available: data.available,
+            required: data2.required,
+            available: data2.available,
           });
           setShowInsufficientCreditsModal(true);
           return;
         }
-        throw new Error(data.error || "Failed to process audio");
+        throw new Error(data2.error || "Failed to process audio");
       }
 
       // Create local URL for the audio blob
       const audioUrl = URL.createObjectURL(audioBlob);
 
       setResult({
-        transcription: data.text,
+        transcription: data2.text,
         audioUrl: audioUrl,
       });
       creditsEvent.emit();
@@ -275,11 +296,15 @@ export default function VoiceAssistant() {
       // Show toast with credits deducted
       toast({
         title: "Operation Complete",
-        description: `${data.creditsDeducted} credits were deducted from your account`,
+        description: `${data2.creditsDeducted} credits were deducted from your account`,
       });
     } catch (err: any) {
       console.error("Error processing audio:", err);
-      alert(err.message || "Error processing audio. Please try again.");
+      toast({
+        title: "Error",
+        description: err.message || "Error processing audio",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -332,6 +357,26 @@ export default function VoiceAssistant() {
 
   const generateSummary = async () => {
     try {
+      // Calculate total required credits first
+      const totalRequiredCredits = getRemainingCost("summary");
+
+      // Check if user has enough credits before starting
+      const response = await fetch("/api/check-credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
+      });
+
+      const data = await response.json();
+      if (response.status === 402) {
+        setInsufficientCreditsData({
+          required: totalRequiredCredits,
+          available: data.available,
+        });
+        setShowInsufficientCreditsModal(true);
+        return;
+      }
+
       setIsSummaryLoading(true);
       let totalCreditsDeducted = 0;
 
@@ -373,22 +418,24 @@ export default function VoiceAssistant() {
         body: JSON.stringify({ text: transcription }),
       });
 
-      const data = await summaryResponse.json();
+      const summaryData = await summaryResponse.json();
       if (!summaryResponse.ok) {
         if (summaryResponse.status === 402) {
           setInsufficientCreditsData({
-            required: data.required,
-            available: data.available,
+            required: summaryData.required,
+            available: summaryData.available,
           });
           setShowInsufficientCreditsModal(true);
           return;
         }
-        throw new Error(data.details || "Failed to generate summary");
+        throw new Error(summaryData.details || "Failed to generate summary");
       }
 
-      setResult((prev) => (prev ? { ...prev, summary: data.summary } : null));
+      setResult((prev) =>
+        prev ? { ...prev, summary: summaryData.summary } : null
+      );
       creditsEvent.emit();
-      totalCreditsDeducted += data.creditsDeducted;
+      totalCreditsDeducted += summaryData.creditsDeducted;
 
       // Show single toast with total credits deducted
       toast({
@@ -397,7 +444,12 @@ export default function VoiceAssistant() {
       });
     } catch (err: any) {
       console.error("Error generating summary:", err);
-      alert(err.message || "Error generating summary. Please try again.");
+      toast({
+        title: "Error",
+        description:
+          err.message || "Error generating summary. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false);
       setIsSummaryLoading(false);
@@ -624,6 +676,28 @@ export default function VoiceAssistant() {
               <CostButton
                 onClick={async () => {
                   try {
+                    // Calculate total required credits first
+                    const totalRequiredCredits = getRemainingCost("speech");
+
+                    // Check if user has enough credits before starting
+                    const response = await fetch("/api/check-credits", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        requiredCredits: totalRequiredCredits,
+                      }),
+                    });
+
+                    const data = await response.json();
+                    if (response.status === 402) {
+                      setInsufficientCreditsData({
+                        required: totalRequiredCredits,
+                        available: data.available,
+                      });
+                      setShowInsufficientCreditsModal(true);
+                      return;
+                    }
+
                     setIsProcessing(true);
                     let totalCreditsDeducted = 0;
 
@@ -720,9 +794,12 @@ export default function VoiceAssistant() {
                     });
                   } catch (error: any) {
                     console.error("Error in speech generation chain:", error);
-                    alert(
-                      "An error occurred during processing. Please try again."
-                    );
+                    toast({
+                      title: "Error",
+                      description:
+                        error.message || "An error occurred during processing",
+                      variant: "destructive",
+                    });
                   } finally {
                     setIsProcessing(false);
                     setIsSummaryLoading(false);
