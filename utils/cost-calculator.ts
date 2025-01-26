@@ -1,14 +1,14 @@
 export const COST_RATES = {
-  transcription: 6, // $0.006 * 1000
+  transcription: 6, // $0.006 per minute = 6 credits per minute
   summarization: {
-    input: 30, // $0.03 per 1K tokens * 1000
-    output: 60, // $0.06 per 1K tokens * 1000
+    input: 30, // $0.03 per 1K tokens = 30 credits per 1K tokens
+    output: 60, // $0.06 per 1K tokens = 60 credits per 1K tokens
   },
-  tts: 15, // $0.015 per 1K chars * 1000
+  tts: 15, // $0.015 per 1K chars = 15 credits per 1K chars
 } as const;
 
 export function estimateCosts(params: {
-  audioLength?: number; // in minutes
+  audioLength?: number; // in seconds
   textLength?: number; // in characters
   summaryLength?: number; // estimated summary length in characters
 }) {
@@ -22,7 +22,8 @@ export function estimateCosts(params: {
   };
 
   if (params.audioLength) {
-    costs.transcription = params.audioLength * COST_RATES.transcription;
+    // Convert seconds to minutes and calculate cost
+    costs.transcription = (params.audioLength / 60) * COST_RATES.transcription;
   }
 
   if (params.textLength) {

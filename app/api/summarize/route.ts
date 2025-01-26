@@ -59,18 +59,31 @@ export async function POST(request: Request) {
     });
 
     // Update credits
-    await supabase
+    const { data: updatedCredits, error: updateError } = await supabase
       .from("user_credits")
       .update({ credits: credits.credits - costs.total })
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .select("credits")
+      .single();
+
+    if (updateError) {
+      throw new Error("Failed to update credits");
+    }
+
+    // Calculate credits deducted
+    const creditsDeducted = credits.credits - updatedCredits.credits;
 
     return NextResponse.json({
       summary: completion.choices[0].message.content,
-      cost: Math.ceil(costs.total),
+      creditsDeducted,
     });
   } catch (error: any) {
+    console.error("Error generating summary:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to generate summary" },
+      {
+        error: "Failed to generate summary",
+        details: error.message || "Unknown error",
+      },
       { status: 500 }
     );
   }
