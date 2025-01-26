@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CostButtonProps extends Omit<ButtonProps, "isLoading" | "disabled"> {
-  cost: number;
+  cost?: number;
   isLoading?: boolean;
   loadingText?: string;
   disabled?: boolean;
@@ -36,9 +36,11 @@ export function CostButton({
       ) : (
         <>
           <span>{children}</span>
-          <span className="text-xs font-mono text-muted-foreground">
-            {cost} credits
-          </span>
+          {cost !== undefined && (
+            <span className="text-xs font-mono text-muted-foreground">
+              ~{cost} credits
+            </span>
+          )}
         </>
       )}
     </Button>

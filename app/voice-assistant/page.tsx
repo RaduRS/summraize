@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Mic,
@@ -14,7 +14,10 @@ import {
 import { AudioVisualizer } from "@/components/audio-visualizer";
 import { AudioPlayer } from "@/components/audio-player";
 import { CostButton } from "@/components/cost-button";
-import { estimateCosts } from "@/utils/cost-calculator";
+import {
+  estimateCosts,
+  calculateAudioOperationCosts,
+} from "@/utils/cost-calculator";
 import { creditsEvent } from "@/lib/credits-event";
 
 interface ProcessingResult {
@@ -38,6 +41,10 @@ export default function VoiceAssistant() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
+  const [recordingTime, setRecordingTime] = useState<number>(0);
+  const [finalDuration, setFinalDuration] = useState<number>(0);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const MAX_RECORDING_TIME = 60; // 1 minute max
 
@@ -47,6 +54,12 @@ export default function VoiceAssistant() {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
+
+      // Start the recording timer
+      setRecordingTime(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((time) => time + 1);
+      }, 1000);
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -69,13 +82,61 @@ export default function VoiceAssistant() {
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
     if (mediaRecorderRef.current && isRecording) {
+      // Clear the recording timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+      // Save the final recording time
+      setFinalDuration(recordingTime);
+      setAudioDuration(recordingTime);
+
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream
         .getTracks()
         .forEach((track) => track.stop());
       setIsRecording(false);
+
+      // Wait for the ondataavailable event to complete
+      await new Promise<void>((resolve) => {
+        mediaRecorderRef.current!.onstop = async () => {
+          const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+
+          // Process audio duration before showing UI
+          const audio = new Audio();
+          const url = URL.createObjectURL(audioBlob);
+
+          try {
+            await new Promise((resolve, reject) => {
+              audio.addEventListener("loadedmetadata", resolve);
+              audio.addEventListener("error", reject);
+              audio.src = url;
+            });
+
+            if (
+              audio.duration &&
+              !isNaN(audio.duration) &&
+              isFinite(audio.duration)
+            ) {
+              setAudioDuration(audio.duration);
+            } else {
+              setAudioDuration(finalDuration); // Use recorded duration as fallback
+            }
+          } catch (error) {
+            console.error("Error loading audio:", error);
+            setAudioDuration(finalDuration);
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+
+          // Now update the UI with the processed audio
+          setAudioBlob(audioBlob);
+          setResult(null);
+          setTtsAudioUrl(null);
+          resolve();
+        };
+      });
     }
   };
 
@@ -127,7 +188,41 @@ export default function VoiceAssistant() {
     handleAudioReady(file);
   };
 
-  const handleAudioReady = (blob: Blob) => {
+  const handleAudioReady = async (blob: Blob) => {
+    // Create an audio element to get duration
+    const audio = new Audio();
+    const url = URL.createObjectURL(blob);
+
+    try {
+      // Wait for audio metadata to load
+      await new Promise((resolve, reject) => {
+        audio.addEventListener("loadedmetadata", resolve);
+        audio.addEventListener("error", reject);
+        audio.src = url;
+      });
+
+      // Set duration if valid, otherwise use recordingTime
+      if (
+        audio.duration &&
+        !isNaN(audio.duration) &&
+        isFinite(audio.duration)
+      ) {
+        setAudioDuration(audio.duration);
+        setFinalDuration(audio.duration);
+      } else {
+        setAudioDuration(recordingTime);
+        setFinalDuration(recordingTime);
+      }
+    } catch (error) {
+      console.error("Error loading audio:", error);
+      // Use recordingTime as fallback
+      setAudioDuration(recordingTime);
+      setFinalDuration(recordingTime);
+    } finally {
+      // Cleanup
+      URL.revokeObjectURL(url);
+    }
+
     setAudioBlob(blob);
     setResult(null);
     setTtsAudioUrl(null);
@@ -205,19 +300,41 @@ export default function VoiceAssistant() {
   };
 
   const generateSummary = async () => {
-    if (!result?.transcription) return;
-
-    setIsSummaryLoading(true);
     try {
-      const response = await fetch("/api/summarize", {
+      setIsSummaryLoading(true);
+
+      // Step 1: Transcribe if needed
+      let transcription = result?.transcription;
+      if (!transcription) {
+        setIsProcessing(true);
+        const formData = new FormData();
+        formData.append("audio", audioBlob!, "audio.webm");
+        const response = await fetch("/api/process-audio", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to process audio");
+        }
+        transcription = data.text;
+        setResult({
+          transcription: data.text,
+          audioUrl: URL.createObjectURL(audioBlob!),
+        });
+        setIsProcessing(false);
+      }
+
+      // Step 2: Generate summary
+      const summaryResponse = await fetch("/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: result.transcription }),
+        body: JSON.stringify({ text: transcription }),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 402) {
+      const data = await summaryResponse.json();
+      if (!summaryResponse.ok) {
+        if (summaryResponse.status === 402) {
           alert(
             `Insufficient credits.\nCost: ${Math.ceil(data.required)} credits\nAvailable: ${Math.floor(data.available)} credits`
           );
@@ -233,6 +350,7 @@ export default function VoiceAssistant() {
       console.error("Error generating summary:", err);
       alert(err.message || "Error generating summary. Please try again.");
     } finally {
+      setIsProcessing(false);
       setIsSummaryLoading(false);
     }
   };
@@ -269,29 +387,56 @@ export default function VoiceAssistant() {
     setIsTtsPlaying(!isTtsPlaying);
   };
 
-  const transcriptionCost = audioBlob
-    ? Math.ceil(
-        estimateCosts({
-          audioLength: audioBlob.size / (16000 * 2) / 60, // Convert bytes to minutes
-        }).total
-      )
-    : 0;
+  const calculateCosts = (duration: number) => {
+    const transcribeCost = calculateAudioOperationCosts(duration, "transcribe");
+    const summarizeCost = calculateAudioOperationCosts(duration, "summarize");
+    const ttsCost = calculateAudioOperationCosts(duration, "tts");
 
-  const summaryCost = result?.transcription
-    ? Math.ceil(
-        estimateCosts({
-          textLength: result.transcription.length,
-        }).total
-      )
-    : 0;
+    return {
+      transcribe: transcribeCost,
+      summary: transcribeCost + summarizeCost,
+      speech: transcribeCost + summarizeCost + ttsCost,
+    };
+  };
 
-  const ttsCost = result?.summary
-    ? Math.ceil(
-        estimateCosts({
-          summaryLength: result.summary.length,
-        }).total
-      )
-    : 0;
+  const getRemainingCost = (operation: "transcribe" | "summary" | "speech") => {
+    if (!audioDuration || isNaN(audioDuration) || !isFinite(audioDuration)) {
+      return 0;
+    }
+
+    const allCosts = calculateCosts(audioDuration);
+
+    switch (operation) {
+      case "transcribe":
+        return allCosts.transcribe;
+
+      case "summary":
+        // If already transcribed, only charge for summary
+        if (result?.transcription) {
+          return allCosts.summary - allCosts.transcribe;
+        }
+        return allCosts.summary;
+
+      case "speech":
+        if (result?.transcription && result?.summary) {
+          // If both transcription and summary exist, only charge for TTS
+          return allCosts.speech - allCosts.summary;
+        } else if (result?.transcription) {
+          // If only transcription exists, charge for summary + TTS
+          return allCosts.speech - allCosts.transcribe;
+        }
+        return allCosts.speech;
+    }
+  };
+
+  // Add a cleanup effect
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col items-center gap-8 p-8">
@@ -303,6 +448,12 @@ export default function VoiceAssistant() {
 
         <div className="border rounded-lg p-4 bg-muted/50">
           <AudioVisualizer isRecording={isRecording} />
+          {isRecording && (
+            <div className="text-center mt-2 font-mono text-sm">
+              {Math.floor(recordingTime / 60)}:
+              {(recordingTime % 60).toString().padStart(2, "0")}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-center gap-4">
@@ -354,6 +505,9 @@ export default function VoiceAssistant() {
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-sm text-muted-foreground">
                   Audio Ready
+                  {recordingTime > 0
+                    ? ` (${Math.floor(finalDuration / 60)}:${(finalDuration % 60).toString().padStart(2, "0")})`
+                    : ""}
                 </h4>
                 <Button
                   onClick={() => window.open(URL.createObjectURL(audioBlob))}
@@ -367,84 +521,53 @@ export default function VoiceAssistant() {
               <AudioPlayer
                 src={result?.audioUrl || URL.createObjectURL(audioBlob)}
                 onError={() => alert("Error playing audio")}
+                initialDuration={finalDuration}
+                onLoadedMetadata={(e) => {
+                  const audio = e.target as HTMLAudioElement;
+                  if (
+                    audio.duration &&
+                    !isNaN(audio.duration) &&
+                    isFinite(audio.duration)
+                  ) {
+                    setAudioDuration(audio.duration);
+                  } else {
+                    setAudioDuration(finalDuration);
+                  }
+                }}
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex justify-between gap-4">
               <CostButton
                 onClick={transcribe}
-                disabled={Boolean(isProcessing || result?.transcription)}
+                disabled={
+                  isProcessing ||
+                  isSummaryLoading ||
+                  isTtsLoading ||
+                  !!result?.transcription
+                }
                 isLoading={isProcessing}
-                cost={transcriptionCost}
+                cost={
+                  result?.transcription
+                    ? undefined
+                    : getRemainingCost("transcribe")
+                }
+                className="w-[180px]"
               >
                 Transcribe Audio
               </CostButton>
 
               <CostButton
-                onClick={async () => {
-                  try {
-                    setIsProcessing(true);
-                    let transcriptionText = result?.transcription;
-
-                    // First transcribe if needed
-                    if (!transcriptionText) {
-                      const formData = new FormData();
-                      formData.append("audio", audioBlob!, "audio.webm");
-                      const response = await fetch("/api/process-audio", {
-                        method: "POST",
-                        body: formData,
-                      });
-                      const data = await response.json();
-                      if (!response.ok) {
-                        throw new Error(
-                          data.error || "Failed to process audio"
-                        );
-                      }
-                      transcriptionText = data.text;
-                      setResult({
-                        transcription: data.text,
-                        audioUrl: URL.createObjectURL(audioBlob!),
-                      });
-                    }
-
-                    // Then immediately do summary
-                    setIsSummaryLoading(true);
-                    const response = await fetch("/api/summarize", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        text: transcriptionText,
-                      }),
-                    });
-                    const summaryData = await response.json();
-                    if (!response.ok) {
-                      throw new Error(
-                        summaryData.error || "Failed to generate summary"
-                      );
-                    }
-                    setResult((prev) =>
-                      prev ? { ...prev, summary: summaryData.summary } : null
-                    );
-                    creditsEvent.emit();
-                  } catch (error) {
-                    console.error("Error in summary generation:", error);
-                    alert(
-                      "An error occurred during processing. Please try again."
-                    );
-                  } finally {
-                    setIsProcessing(false);
-                    setIsSummaryLoading(false);
-                  }
-                }}
-                disabled={Boolean(
-                  isProcessing || isSummaryLoading || result?.summary
-                )}
-                isLoading={isProcessing || isSummaryLoading}
-                cost={
-                  !result?.transcription
-                    ? transcriptionCost + summaryCost
-                    : summaryCost
+                onClick={generateSummary}
+                disabled={
+                  isProcessing ||
+                  isSummaryLoading ||
+                  isTtsLoading ||
+                  !!result?.summary
                 }
+                isLoading={isSummaryLoading}
+                cost={result?.summary ? undefined : getRemainingCost("summary")}
+                className="w-[180px]"
               >
                 Generate Summary
               </CostButton>
@@ -521,20 +644,15 @@ export default function VoiceAssistant() {
                     setIsTtsLoading(false);
                   }
                 }}
-                disabled={Boolean(
+                disabled={
                   isProcessing ||
-                    isSummaryLoading ||
-                    isTtsLoading ||
-                    ttsAudioUrl
-                )}
-                isLoading={isProcessing || isSummaryLoading || isTtsLoading}
-                cost={
-                  !result?.transcription
-                    ? transcriptionCost + summaryCost + ttsCost
-                    : !result?.summary
-                      ? summaryCost + ttsCost
-                      : ttsCost
+                  isSummaryLoading ||
+                  isTtsLoading ||
+                  !!ttsAudioUrl
                 }
+                isLoading={isTtsLoading}
+                cost={ttsAudioUrl ? undefined : getRemainingCost("speech")}
+                className="w-[180px]"
               >
                 Generate Speech
               </CostButton>

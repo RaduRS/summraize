@@ -61,3 +61,67 @@ export function estimateCosts(params: {
 
   return costs;
 }
+
+export function calculateOperationCosts(
+  wordCount: number,
+  operation: "transcribe" | "summarize" | "tts"
+) {
+  // Convert words to characters (average 5 chars per word)
+  const charCount = wordCount * 5;
+
+  switch (operation) {
+    case "transcribe":
+      // For transcription, we should use a different calculation
+      // since it's based on word count directly
+      return Math.ceil((wordCount * COST_RATES.transcription) / 1000);
+    case "summarize":
+      return Math.ceil(
+        estimateCosts({
+          textLength: charCount,
+          summaryLength: Math.ceil(charCount * 0.2),
+        }).summarization
+      );
+    case "tts":
+      return Math.ceil(
+        estimateCosts({
+          summaryLength: charCount,
+        }).tts
+      );
+    default:
+      return 0;
+  }
+}
+
+export function calculateAudioOperationCosts(
+  audioLengthInSeconds: number,
+  operation: "transcribe" | "summarize" | "tts"
+) {
+  // Convert seconds to minutes
+  const minutes = audioLengthInSeconds / 60;
+
+  // Estimate word count based on average speaking rate (130 words per minute)
+  const estimatedWordCount = Math.ceil(minutes * 130);
+
+  switch (operation) {
+    case "transcribe":
+      // Audio transcription cost based on duration
+      return Math.ceil(minutes * COST_RATES.transcription);
+    case "summarize":
+      // Summarization based on estimated word count
+      return Math.ceil(
+        estimateCosts({
+          textLength: estimatedWordCount * 5, // Convert to chars
+          summaryLength: Math.ceil(estimatedWordCount * 5 * 0.2),
+        }).summarization
+      );
+    case "tts":
+      // TTS cost for the summary (20% of original length)
+      return Math.ceil(
+        estimateCosts({
+          summaryLength: Math.ceil(estimatedWordCount * 5 * 0.2),
+        }).tts
+      );
+    default:
+      return 0;
+  }
+}
