@@ -20,6 +20,24 @@ interface ProcessingResult {
   summary?: string;
 }
 
+interface CostEstimate {
+  transcription?: number;
+  fullText?: number;
+  summary?: number;
+}
+
+interface FileAnalysis {
+  wordCount: number;
+  isEstimate: boolean;
+  transcriptionCost: number;
+  fullTextCost: number;
+  summaryCost: number;
+  estimateRange?: {
+    minWordCount: number;
+    maxWordCount: number;
+  };
+}
+
 export default function DocumentConverter() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
@@ -30,6 +48,59 @@ export default function DocumentConverter() {
   const [mode, setMode] = useState<"full" | "summary">("full");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
+  const [fileAnalysis, setFileAnalysis] = useState<FileAnalysis | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const analyzeFile = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/analyze-file", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to analyze file");
+      }
+
+      setFileAnalysis({
+        wordCount: data.wordCount,
+        isEstimate: data.isEstimate,
+        transcriptionCost: data.costs.transcription,
+        fullTextCost: data.costs.fullText,
+        summaryCost: data.costs.summary,
+        estimateRange: data.estimateRange,
+      });
+    } catch (error) {
+      console.error("Error analyzing file:", error);
+    }
+  };
+
+  const generatePreview = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/generate-preview", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate preview");
+      }
+
+      return data.previewUrl;
+    } catch (error) {
+      console.error("Preview generation failed:", error);
+      return null;
+    }
+  };
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -46,6 +117,30 @@ export default function DocumentConverter() {
     setResult(null);
     setFullTextAudioUrl(null);
     setSummaryAudioUrl(null);
+
+    // Generate preview for all file types using FormData
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("/api/generate-preview", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate preview");
+      }
+
+      setPreviewUrl(data.previewUrl);
+    } catch (error) {
+      console.error("Error generating preview:", error);
+      setPreviewUrl("/document-icon.png"); // Fallback to generic icon
+    }
+
+    // Analyze file content
+    await analyzeFile(file);
   };
 
   const transcribe = async () => {
@@ -76,17 +171,32 @@ export default function DocumentConverter() {
     }
   };
 
-  const handleGenerateSpeech = async () => {
+  const handleGenerateSpeech = async (mode: "full" | "summary") => {
     try {
       let currentText = result?.text;
       let summaryText = result?.summary;
 
-      // First transcribe if we don't have the text yet
+      // First transcribe if needed
       if (!currentText) {
         setIsProcessing(true);
         const formData = new FormData();
         formData.append("file", selectedFile!);
 
+        // Get cost estimate from backend first
+        const costResponse = await fetch("/api/estimate-cost", {
+          method: "POST",
+          body: formData,
+        });
+
+        const costData = await costResponse.json();
+        if (costResponse.status === 402) {
+          alert(
+            `Insufficient credits.\nRequired: ${Math.ceil(costData.required)}\nAvailable: ${Math.floor(costData.available)}`
+          );
+          return;
+        }
+
+        // If user has enough credits, proceed with processing
         const response = await fetch("/api/process-document", {
           method: "POST",
           body: formData,
@@ -100,7 +210,6 @@ export default function DocumentConverter() {
         currentText = data.text;
         setResult({ text: data.text });
         creditsEvent.emit();
-        setIsProcessing(false);
       }
 
       // Generate summary if needed
@@ -173,43 +282,31 @@ export default function DocumentConverter() {
     }
   };
 
-  // Update the estimation function to be more conservative
-  const estimateDocumentTokens = (file: File) => {
-    // More conservative estimation:
-    // For images/PDFs: ~100 words per KB
-    // For text files: ~200 characters per KB
-    // 1 token ≈ 4 characters
-    const tokensPerKB = file.name.toLowerCase().endsWith(".txt") ? 50 : 25;
-    return Math.ceil((file.size / 1024) * tokensPerKB); // size in KB * tokens per KB
+  const getRemainingCost = (operation: "transcribe" | "full" | "summary") => {
+    if (!fileAnalysis) return 0;
+
+    switch (operation) {
+      case "transcribe":
+        return fileAnalysis.transcriptionCost;
+
+      case "full":
+        // If already transcribed, only charge for TTS
+        if (result?.text) {
+          return fileAnalysis.fullTextCost - fileAnalysis.transcriptionCost;
+        }
+        return fileAnalysis.fullTextCost;
+
+      case "summary":
+        if (fullTextAudioUrl) {
+          // If full text speech exists, only charge for summary generation and its TTS
+          return fileAnalysis.summaryCost - fileAnalysis.fullTextCost;
+        } else if (result?.text) {
+          // If only transcription exists, charge for summary + TTS
+          return fileAnalysis.summaryCost - fileAnalysis.transcriptionCost;
+        }
+        return fileAnalysis.summaryCost;
+    }
   };
-
-  // Update cost calculations
-  const transcriptionCost = selectedFile
-    ? Math.ceil(
-        estimateCosts({
-          textLength: estimateDocumentTokens(selectedFile),
-        }).total
-      )
-    : 0;
-
-  const speechCost = selectedFile
-    ? Math.ceil(
-        estimateCosts({
-          ...(mode === "summary"
-            ? {
-                // For summary mode: original text cost + 20% for summary
-                textLength: estimateDocumentTokens(selectedFile),
-                summaryLength: Math.ceil(
-                  estimateDocumentTokens(selectedFile) * 0.2
-                ),
-              }
-            : {
-                // For full text mode: just the text length
-                textLength: estimateDocumentTokens(selectedFile),
-              }),
-        }).total
-      )
-    : 0;
 
   return (
     <div className="flex flex-col items-center gap-8 p-8">
@@ -241,52 +338,83 @@ export default function DocumentConverter() {
         {selectedFile && (
           <div className="w-full max-w-2xl space-y-4">
             <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-sm text-muted-foreground">
-                  Document Ready: {selectedFile.name}
-                </h4>
+              <div className="flex items-start gap-4">
+                {previewUrl && (
+                  <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border bg-muted">
+                    <img
+                      src={previewUrl}
+                      alt="Document preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm text-muted-foreground">
+                        {selectedFile.name}
+                      </h4>
+                    </div>
+                    {fileAnalysis && (
+                      <div className="text-sm text-muted-foreground">
+                        {result?.text ? (
+                          <>
+                            Word Count:{" "}
+                            {result.text
+                              .trim()
+                              .split(/\s+/)
+                              .length.toLocaleString()}
+                          </>
+                        ) : (
+                          <>
+                            Estimated Word Count:{" "}
+                            {fileAnalysis.wordCount.toLocaleString()}
+                            <span className="text-xs ml-2 text-muted-foreground">
+                              (Range:{" "}
+                              {fileAnalysis.estimateRange?.minWordCount.toLocaleString()}{" "}
+                              -{" "}
+                              {fileAnalysis.estimateRange?.maxWordCount.toLocaleString()}{" "}
+                              words)
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="flex justify-between gap-4">
               <CostButton
                 onClick={transcribe}
                 disabled={Boolean(isProcessing || result?.text)}
                 isLoading={isProcessing}
-                cost={transcriptionCost}
+                cost={result?.text ? undefined : getRemainingCost("transcribe")}
+                className="w-[180px]"
               >
                 Transcribe Document
               </CostButton>
 
-              <div className="flex flex-col gap-4">
-                <Select
-                  value={mode}
-                  onValueChange={(value) =>
-                    setMode(value as "full" | "summary")
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full">Full Text Speech</SelectItem>
-                    <SelectItem value="summary">Summarized Speech</SelectItem>
-                  </SelectContent>
-                </Select>
+              <CostButton
+                onClick={() => handleGenerateSpeech("full")}
+                disabled={Boolean(isProcessing || fullTextAudioUrl)}
+                isLoading={isTtsLoading}
+                cost={fullTextAudioUrl ? undefined : getRemainingCost("full")}
+                className="w-[180px]"
+              >
+                Generate Full Speech
+              </CostButton>
 
-                <CostButton
-                  onClick={handleGenerateSpeech}
-                  disabled={Boolean(
-                    !selectedFile ||
-                      (mode === "full" && fullTextAudioUrl) ||
-                      (mode === "summary" && result?.summary && summaryAudioUrl)
-                  )}
-                  isLoading={isProcessing || isSummaryLoading || isTtsLoading}
-                  cost={speechCost}
-                >
-                  Generate {mode === "full" ? "Full Text" : "Summary"} Speech
-                </CostButton>
-              </div>
+              <CostButton
+                onClick={() => handleGenerateSpeech("summary")}
+                disabled={Boolean(isProcessing || summaryAudioUrl)}
+                isLoading={isSummaryLoading}
+                cost={summaryAudioUrl ? undefined : getRemainingCost("summary")}
+                className="w-[180px]"
+              >
+                Generate Summary Speech
+              </CostButton>
             </div>
 
             {result?.text && (
