@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import OpenAI from "openai";
-import { File } from "@web-std/file";
 import { estimateCosts } from "@/utils/cost-calculator";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 
-export const maxDuration = 300; // 5 minutes timeout
-export const dynamic = "force-dynamic";
+if (!DEEPGRAM_API_KEY) {
+  throw new Error("DEEPGRAM_API_KEY is not configured");
+}
 
 export const config = {
-  runtime: "nodejs",
+  api: {
+    bodyParser: false,
+  },
   maxDuration: 300,
 };
 
@@ -20,7 +19,6 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("audio");
-    const duration = Number(formData.get("duration")) || 0; // Get duration from frontend
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -40,9 +38,62 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Calculate cost based on actual audio duration
+    // Convert File to buffer for Deepgram
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Call Deepgram API
+    const response = await fetch(
+      "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&detect_language=true&punctuate=true&paragraphs=true",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${DEEPGRAM_API_KEY}`,
+          "Content-Type": "audio/webm",
+        },
+        body: buffer,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to transcribe audio with Deepgram");
+    }
+
+    const data = await response.json();
+
+    // Get the raw transcription
+    let transcription =
+      data.results?.channels[0]?.alternatives[0]?.transcript || "";
+
+    // Format the text for better readability
+    transcription = transcription
+      // Add paragraph breaks at natural points
+      .replace(
+        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+        ".\n\n$1 "
+      )
+      // Add paragraph break after introductions/greetings
+      .replace(
+        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+        "$1$2\n\n"
+      )
+      // Add paragraph break for new speakers or dialogue
+      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+      .replace(
+        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+        "$1\n\n$2"
+      )
+      // Normalize other spaces
+      .replace(/[^\S\n]+/g, " ")
+      // Remove excessive line breaks
+      .replace(/\n{3,}/g, "\n\n")
+      // Trim any leading/trailing whitespace
+      .trim();
+
+    const duration = Math.ceil(data.metadata?.duration || 0);
+
+    // Calculate cost based on audio duration
     const costs = estimateCosts({
-      audioLength: duration, // Use actual duration in seconds
+      audioLength: duration,
     });
 
     // Check user credits
@@ -77,29 +128,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get signed URL instead of public URL
-    const { data } = await supabase.storage
+    // Get signed URL
+    const { data: urlData } = await supabase.storage
       .from("audio_recordings")
       .createSignedUrl(fileName, 3600);
 
-    if (!data?.signedUrl) {
+    if (!urlData?.signedUrl) {
       throw new Error("Failed to generate signed URL");
     }
 
-    const signedUrl = data.signedUrl;
-
-    // Convert File to audio file for OpenAI
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const audioFile = new File([buffer], "audio.webm", { type: "audio/webm" });
-
-    // Transcribe with Whisper
-    const transcription = await openai.audio.transcriptions.create({
-      file: audioFile,
-      model: "whisper-1",
-      language: "en",
-    });
-
-    // Deduct credits
+    // Update credits
     const { data: updatedCredits, error: updateError } = await supabase
       .from("user_credits")
       .update({ credits: credits.credits - costs.total })
@@ -118,17 +156,16 @@ export async function POST(request: Request) {
     const { error: dbError } = await supabase.from("audio_recordings").insert({
       user_id: user.id,
       file_path: fileName,
-      transcription: transcription.text,
+      transcription: transcription,
     });
 
     if (dbError) {
       console.error("Database error:", dbError);
     }
 
-    // Return just what we need
     return NextResponse.json({
-      text: transcription.text,
-      audioUrl: signedUrl,
+      text: transcription,
+      audioUrl: urlData.signedUrl,
       creditsDeducted,
     });
   } catch (error: any) {

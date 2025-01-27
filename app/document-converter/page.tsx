@@ -497,9 +497,11 @@ export default function DocumentConverter() {
             {result?.text && (
               <div className="space-y-2">
                 <h3 className="font-semibold">Document Text</h3>
-                <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
-                  {result.text}
-                </p>
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
+                  {result.text.split("\n\n").map((paragraph, i) => (
+                    <p key={i}>{paragraph}</p>
+                  ))}
+                </div>
                 {fullTextAudioUrl && (
                   <div className="rounded-lg border bg-card p-4 mt-2">
                     <div className="flex items-center justify-between mb-3">
@@ -527,9 +529,11 @@ export default function DocumentConverter() {
             {result?.summary && (
               <div className="space-y-2">
                 <h3 className="font-semibold">Summary</h3>
-                <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
-                  {result.summary}
-                </p>
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
+                  {result.summary.split("\n\n").map((paragraph, i) => (
+                    <p key={i}>{paragraph}</p>
+                  ))}
+                </div>
                 {summaryAudioUrl && (
                   <div className="rounded-lg border bg-card p-4 mt-2">
                     <div className="flex items-center justify-between mb-3">
