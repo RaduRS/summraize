@@ -307,12 +307,15 @@ export default function DocumentConverter() {
         throw new Error("No text available for speech generation");
       }
 
+      // Clean up text for speech by removing asterisks
+      const cleanTextForSpeech = textToSpeak.replace(/\*(.*?)\*/g, "$1");
+
       setIsTtsLoading(true);
       const ttsResponse = await fetch("/api/text-to-speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: textToSpeak,
+          text: cleanTextForSpeech,
           voice: "alloy",
         }),
       });
@@ -499,7 +502,15 @@ export default function DocumentConverter() {
                 <h3 className="font-semibold">Document Text</h3>
                 <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
                   {result.text.split("\n\n").map((paragraph, i) => (
-                    <p key={i}>{paragraph}</p>
+                    <p key={i}>
+                      {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
+                        if (part.startsWith("*") && part.endsWith("*")) {
+                          // Remove asterisks and render as bold
+                          return <strong key={j}>{part.slice(1, -1)}</strong>;
+                        }
+                        return part;
+                      })}
+                    </p>
                   ))}
                 </div>
                 {fullTextAudioUrl && (
@@ -531,7 +542,15 @@ export default function DocumentConverter() {
                 <h3 className="font-semibold">Summary</h3>
                 <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
                   {result.summary.split("\n\n").map((paragraph, i) => (
-                    <p key={i}>{paragraph}</p>
+                    <p key={i}>
+                      {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
+                        if (part.startsWith("*") && part.endsWith("*")) {
+                          // Remove asterisks and render as bold
+                          return <strong key={j}>{part.slice(1, -1)}</strong>;
+                        }
+                        return part;
+                      })}
+                    </p>
                   ))}
                 </div>
                 {summaryAudioUrl && (
