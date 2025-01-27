@@ -22,12 +22,6 @@ interface ProcessingResult {
   summary?: string;
 }
 
-interface CostEstimate {
-  transcription?: number;
-  fullText?: number;
-  summary?: number;
-}
-
 interface FileAnalysis {
   wordCount: number;
   isEstimate: boolean;
@@ -51,7 +45,6 @@ export default function DocumentConverter() {
   const [mode, setMode] = useState<"full" | "summary">("full");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
   const [fileAnalysis, setFileAnalysis] = useState<FileAnalysis | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showInsufficientCreditsModal, setShowInsufficientCreditsModal] =

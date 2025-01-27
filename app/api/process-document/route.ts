@@ -118,10 +118,6 @@ function formatExtractedText(text: string): string {
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  return NextResponse.json({ status: "API route working" });
-}
-
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
