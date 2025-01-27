@@ -29,7 +29,7 @@ async function extractTextFromImage(buffer: Buffer): Promise<string> {
           content: [
             {
               type: "text",
-              text: "Extract and return only the text from this image. Format it with proper paragraphs and spacing. Return just the text, no additional commentary.",
+              text: "Extract the text from this image, preserving the original formatting as much as possible. Pay attention to:\n- Paragraph breaks and indentation\n- Section headers and titles\n- Lists and bullet points\n- Text alignment (if it's centered, right-aligned, etc.)\n- Special formatting like italics or bold (mark with *asterisks*)\n- Column layouts\n- Any other visual structure from the original.\nIf the formatting isn't clear or seems standard, fall back to natural paragraph breaks.",
             },
             {
               type: "image_url",
@@ -47,30 +47,35 @@ async function extractTextFromImage(buffer: Buffer): Promise<string> {
       throw new Error("No text extracted from image");
     }
 
-    // Format the extracted text
+    // Get the formatted text from GPT-4 Vision
     let text = response.choices[0].message.content;
+
+    // If the text doesn't seem to have any special formatting,
+    // apply our standard formatting as fallback
+    if (!text.includes("\n") && !text.includes("*")) {
+      text = text
+        // Add paragraph breaks at natural points
+        .replace(
+          /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+          ".\n\n$1 "
+        )
+        // Add paragraph break after introductions/greetings
+        .replace(
+          /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+          "$1$2\n\n"
+        )
+        // Add paragraph break for new speakers or dialogue
+        .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+        .replace(
+          /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+          "$1\n\n$2"
+        );
+    }
+
+    // Clean up any excessive spacing while preserving intentional line breaks
     text = text
-      // Add paragraph breaks at natural points
-      .replace(
-        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
-        ".\n\n$1 "
-      )
-      // Add paragraph break after introductions/greetings
-      .replace(
-        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
-        "$1$2\n\n"
-      )
-      // Add paragraph break for new speakers or dialogue
-      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
-      .replace(
-        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
-        "$1\n\n$2"
-      )
-      // Normalize other spaces
-      .replace(/[^\S\n]+/g, " ")
-      // Remove excessive line breaks
-      .replace(/\n{3,}/g, "\n\n")
-      // Trim any leading/trailing whitespace
+      .replace(/[^\S\n]+/g, " ") // Normalize spaces but preserve line breaks
+      .replace(/\n{3,}/g, "\n\n") // Ensure max two line breaks
       .trim();
 
     return text;
@@ -174,9 +179,14 @@ export async function POST(request: Request) {
 
     // Clean up the text formatting but preserve paragraphs
     const cleanText = text
-      .replace(/([a-z])([A-Z])/g, "$1 $2") // Add space between camelCase
-      .replace(/[^\S\n]+/g, " ") // Normalize spaces but preserve line breaks
-      .replace(/\n{3,}/g, "\n\n") // Ensure max two line breaks
+      // Remove leading/trailing quotes
+      .replace(/^['"`]+|['"`]+$/g, "")
+      // Add space between camelCase
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      // Normalize spaces but preserve line breaks
+      .replace(/[^\S\n]+/g, " ")
+      // Ensure max two line breaks
+      .replace(/\n{3,}/g, "\n\n")
       .trim();
 
     // When actually processing and charging

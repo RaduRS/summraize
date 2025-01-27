@@ -60,32 +60,44 @@ export async function POST(request: Request) {
       version:
         "dfdf537ba482b029e0a761699e6f55e9162cfd159270bfe0e44857caa5f275a6",
       input: {
-        text,
+        text: text.replace(/\*(.*?)\*/g, "$1"), // Remove asterisks for speech
         speed: 1.1,
         voice: "af",
       },
     });
 
-    // Calculate timeout based on text length (minimum 60s, maximum 300s)
-    // Assuming processing takes ~1 second per 100 words
-    const wordsCount = text.split(/\s+/).length;
-    const dynamicTimeout = Math.min(300000, Math.max(60000, wordsCount * 10));
+    // Initial delay to allow the model to start
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Wait for the prediction to complete
+    // Calculate timeout based on text length (minimum 120s, maximum 300s)
+    const charCount = text.length;
+    const dynamicTimeout = Math.min(300000, Math.max(120000, charCount * 15));
+
+    // Wait for the prediction to complete with exponential backoff
     let output = await replicate.predictions.get(prediction.id);
     const startTime = Date.now();
+    let retryDelay = 1000; // Start with 1 second delay
 
     while (
-      output.status === "processing" &&
+      ["starting", "processing"].includes(output.status) &&
       Date.now() - startTime < dynamicTimeout
     ) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
       output = await replicate.predictions.get(prediction.id);
+
+      // Increase delay up to 5 seconds max
+      retryDelay = Math.min(retryDelay * 1.5, 5000);
+    }
+
+    if (output.status === "failed") {
+      throw new Error(
+        `Failed to generate speech: ${output.error || "Model failed"}`
+      );
     }
 
     if (output.status !== "succeeded" || !output.output) {
       throw new Error(
-        `Failed to generate speech: ${output.error || "Status: " + output.status}`
+        `Timeout generating speech. Status: ${output.status}. Try with shorter text.`
       );
     }
 
