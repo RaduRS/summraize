@@ -823,18 +823,18 @@ export default function VoiceAssistant() {
             {result?.transcription && (
               <div className="space-y-2">
                 <h3 className="font-semibold">Transcription</h3>
-                <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+                <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg whitespace-pre-line leading-relaxed">
                   {result.transcription}
-                </p>
+                </div>
               </div>
             )}
 
             {result?.summary && (
               <div className="space-y-2">
                 <h3 className="font-semibold">Summary</h3>
-                <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+                <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg whitespace-pre-line leading-relaxed">
                   {result.summary}
-                </p>
+                </div>
               </div>
             )}
 
