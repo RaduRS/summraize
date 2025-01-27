@@ -2,20 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import OpenAI from "openai";
 import { estimateCosts } from "@/utils/cost-calculator";
-import { extractTextFromPDF } from "@/utils/pdf";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
-const encoder = new TextEncoder();
-
-// const openai = new OpenAI({
-//   apiKey: process.env.OPENAI_API_KEY,
-// });
-
-// export const maxDuration = 300;
-// export const dynamic = "force-dynamic";
 
 async function extractTextFromImage(buffer: Buffer): Promise<string> {
   try {
