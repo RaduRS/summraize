@@ -59,7 +59,13 @@ export async function POST(request: Request) {
         messages: [
           {
             role: "system",
-            content: `You are a skilled summarizer who creates natural, conversational summaries. Adapt your summary length based on the input: be brief for short texts, more detailed for longer ones, but always maintain a natural flow. Focus on the essential information and present it as if you're explaining it to someone, without using bullet points, asterisks, or section markers. The summary should read like a cohesive narrative that a human would speak naturally.`,
+            content: `You are a skilled summarizer who creates natural, conversational summaries with proper paragraph structure. Create a well-formatted summary with:
+- Clear paragraph breaks between different topics or ideas
+- Natural flow between paragraphs
+- Important points emphasized with *asterisks* for key terms
+- 2-4 paragraphs depending on content length
+- Each paragraph should be focused on a specific aspect or point
+The summary should read like a cohesive narrative that flows naturally from one paragraph to the next.`,
           },
           {
             role: "user",
@@ -76,6 +82,18 @@ export async function POST(request: Request) {
     }
 
     const completion = await response.json();
+    let summary = completion.choices[0].message.content;
+
+    // Format the summary text
+    summary = summary
+      // Normalize spaces but preserve line breaks
+      .replace(/[^\S\n]+/g, " ")
+      // Ensure proper spacing after punctuation
+      .replace(/([.!?])\s*/g, "$1 ")
+      // Remove excessive line breaks
+      .replace(/\n{3,}/g, "\n\n")
+      // Trim any leading/trailing whitespace
+      .trim();
 
     // Update credits
     const { data: updatedCredits, error: updateError } = await supabase
@@ -93,7 +111,7 @@ export async function POST(request: Request) {
     const creditsDeducted = credits.credits - updatedCredits.credits;
 
     return NextResponse.json({
-      summary: completion.choices[0].message.content,
+      summary: summary,
       creditsDeducted,
     });
   } catch (error: any) {
