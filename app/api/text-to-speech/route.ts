@@ -1,12 +1,53 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
-import OpenAI from "openai";
+import textToSpeech from "@google-cloud/text-to-speech";
+import { google } from "@google-cloud/text-to-speech/build/protos/protos";
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize Google Cloud TTS client
+const client = new textToSpeech.TextToSpeechClient({
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
 });
+
+// Voice types and their quotas
+const VOICE_TIERS = {
+  JOURNEY: {
+    name: "Journey",
+    quota: 1_000_000,
+    voiceParams: {
+      languageCode: "en-US",
+      name: "en-US-Journey-F", // Journey female voice
+      ssmlGender: google.cloud.texttospeech.v1.SsmlVoiceGender.FEMALE,
+    },
+  },
+  WAVENET: {
+    name: "WaveNet",
+    quota: 1_000_000,
+    voiceParams: {
+      languageCode: "en-US",
+      name: "en-US-Wavenet-F", // WaveNet female voice
+      ssmlGender: google.cloud.texttospeech.v1.SsmlVoiceGender.FEMALE,
+    },
+  },
+  NEURAL2: {
+    name: "Neural2",
+    quota: 1_000_000,
+    voiceParams: {
+      languageCode: "en-US",
+      name: "en-US-Neural2-F", // Neural2 female voice
+      ssmlGender: google.cloud.texttospeech.v1.SsmlVoiceGender.FEMALE,
+    },
+  },
+  STANDARD: {
+    name: "Standard",
+    quota: 4_000_000,
+    voiceParams: {
+      languageCode: "en-US",
+      name: "en-US-Standard-F", // Standard female voice
+      ssmlGender: google.cloud.texttospeech.v1.SsmlVoiceGender.FEMALE,
+    },
+  },
+};
 
 // Increase max duration to handle longer texts
 export const config = {
@@ -14,27 +55,39 @@ export const config = {
   maxDuration: 600, // 10 minutes
 };
 
-// Function to split text into chunks at sentence boundaries
-function splitTextIntoChunks(text: string, maxChunkLength = 4000) {
-  // Split text into sentences
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  const chunks: string[] = [];
-  let currentChunk = "";
+// Function to preprocess text and handle long sentences
+function preprocessText(text: string) {
+  // First, clean the text
+  let cleanText = text
+    .replace(/\*(.*?)\*/g, "$1") // Remove asterisks
+    .replace(/\s+/g, " ") // Normalize spaces
+    .trim();
 
-  for (const sentence of sentences) {
-    // If adding this sentence would exceed the limit, save current chunk and start new one
-    if (currentChunk.length + sentence.length > maxChunkLength) {
-      if (currentChunk) chunks.push(currentChunk.trim());
-      currentChunk = sentence;
-    } else {
-      currentChunk += sentence;
+  // Split into sentences, handling multiple punctuation marks
+  const sentences = cleanText.split(/([.!?]+\s+)/);
+
+  // Process each potential long sentence
+  const processedSentences = sentences.map((sentence) => {
+    const trimmed = sentence.trim();
+    if (trimmed.length > 200 && !trimmed.match(/[.!?]$/)) {
+      // Split long sentences at natural break points
+      const parts = sentence.split(
+        /([,;:]|\s+and\s+|\s+but\s+|\s+or\s+|\s+so\s+)/
+      );
+      return parts
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+        .join(". ");
     }
-  }
+    return sentence;
+  });
 
-  // Add the last chunk if it exists
-  if (currentChunk) chunks.push(currentChunk.trim());
-
-  return chunks;
+  // Join everything back together and ensure proper spacing
+  return processedSentences
+    .join(" ")
+    .replace(/\s*([.!?])\s*/g, "$1 ") // Normalize punctuation spacing
+    .replace(/\s+/g, " ") // Clean up any double spaces
+    .trim();
 }
 
 export async function POST(request: Request) {
@@ -79,38 +132,46 @@ export async function POST(request: Request) {
       );
     }
 
-    // Clean text for speech - remove formatting markers and normalize spacing
-    const cleanText = text
-      .replace(/\*(.*?)\*/g, "$1") // Remove asterisks
-      .replace(/\s+/g, " ") // Normalize spaces
-      .trim();
+    // Replace the old text cleaning with the new preprocessing
+    const processedText = preprocessText(text);
 
-    // Split text into chunks if it's too long
-    const chunks = splitTextIntoChunks(cleanText);
-    const audioBuffers: Buffer[] = [];
+    // Get current quota usage from Supabase
+    const { data: quotaData } = await supabase
+      .from("google_tts_quota")
+      .select("*")
+      .single();
 
-    // Process each chunk
-    for (const chunk of chunks) {
-      const mp3 = await openai.audio.speech.create({
-        model: "tts-1",
-        voice: "alloy",
-        input: chunk,
-        response_format: "mp3",
-        speed: 1.0,
-      });
-
-      const buffer = Buffer.from(await mp3.arrayBuffer());
-      audioBuffers.push(buffer);
+    // Determine which voice tier to use based on quota
+    let selectedTier;
+    if (!quotaData || quotaData.journey_chars < VOICE_TIERS.JOURNEY.quota) {
+      selectedTier = VOICE_TIERS.JOURNEY;
+    } else if (quotaData.wavenet_chars < VOICE_TIERS.WAVENET.quota) {
+      selectedTier = VOICE_TIERS.WAVENET;
+    } else if (quotaData.neural2_chars < VOICE_TIERS.NEURAL2.quota) {
+      selectedTier = VOICE_TIERS.NEURAL2;
+    } else {
+      selectedTier = VOICE_TIERS.STANDARD;
     }
 
-    // Combine all audio buffers
-    const finalBuffer = Buffer.concat(audioBuffers);
+    // Generate speech using Google Cloud TTS
+    const [response] = await client.synthesizeSpeech({
+      input: { text: processedText },
+      voice: selectedTier.voiceParams,
+      audioConfig: { audioEncoding: "MP3" },
+    });
+
+    if (!response.audioContent) {
+      throw new Error("Failed to generate audio content");
+    }
+
+    // Convert to buffer
+    const buffer = Buffer.from(response.audioContent);
 
     // Upload to Supabase Storage
     const fileName = `${user.id}/tts-${Date.now().toString()}.mp3`;
     const { error: uploadError } = await supabase.storage
       .from("audio_recordings")
-      .upload(fileName, finalBuffer, {
+      .upload(fileName, buffer, {
         contentType: "audio/mpeg",
       });
 
@@ -126,6 +187,31 @@ export async function POST(request: Request) {
     if (!urlData?.signedUrl) {
       throw new Error("Failed to generate signed URL");
     }
+
+    // Update quota usage in Supabase
+    const charCount = processedText.length;
+    const quotaUpdate = {
+      [selectedTier.name === "Journey"
+        ? "journey_chars"
+        : selectedTier.name === "WaveNet"
+          ? "wavenet_chars"
+          : selectedTier.name === "Neural2"
+            ? "neural2_chars"
+            : "standard_chars"]:
+        (quotaData?.[
+          selectedTier.name === "Journey"
+            ? "journey_chars"
+            : selectedTier.name === "WaveNet"
+              ? "wavenet_chars"
+              : selectedTier.name === "Neural2"
+                ? "neural2_chars"
+                : "standard_chars"
+        ] || 0) + charCount,
+    };
+
+    await supabase
+      .from("google_tts_quota")
+      .upsert({ id: quotaData?.id || 1, ...quotaUpdate });
 
     // Update credits
     const { data: updatedCredits, error: updateError } = await supabase
@@ -145,6 +231,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       audioUrl: urlData.signedUrl,
       creditsDeducted,
+      voiceTier: selectedTier.name,
     });
   } catch (error: any) {
     console.error("Error generating speech:", error);
