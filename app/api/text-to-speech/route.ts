@@ -61,101 +61,81 @@ export async function POST(request: Request) {
       .replace(/\s+/g, " ") // Normalize spaces
       .trim();
 
-    // Split long text into chunks of max 500 characters
-    const chunks = cleanText.match(/.{1,500}(?=\s|$)/g) || [cleanText];
+    // Create prediction with full text
+    const prediction = await replicate.predictions.create({
+      version:
+        "dfdf537ba482b029e0a761699e6f55e9162cfd159270bfe0e44857caa5f275a6",
+      input: {
+        text: cleanText,
+        speed: 1.1,
+        voice: "af",
+      },
+    });
 
-    // Process each chunk in parallel
-    const predictions = await Promise.all(
-      chunks.map((chunk: string) =>
-        replicate.predictions.create({
-          version:
-            "dfdf537ba482b029e0a761699e6f55e9162cfd159270bfe0e44857caa5f275a6",
-          input: {
-            text: chunk,
-            speed: 1.1,
-            voice: "af",
-          },
-        })
-      )
-    );
-
-    // Initial delay to allow models to start
+    // Initial delay to allow model to start
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Wait for all predictions with timeouts
-    const START_TIMEOUT = 15000; // 15 seconds to start
-    const PROCESS_TIMEOUT = 30000; // 30 seconds per chunk
+    // Wait for prediction with timeouts
+    const START_TIMEOUT = 20000; // 20 seconds to start
+    const PROCESS_TIMEOUT = 60000; // 60 seconds for processing
     const startTime = Date.now();
 
-    const outputs = await Promise.all(
-      predictions.map(async (prediction) => {
-        let output = await replicate.predictions.get(prediction.id);
+    let output = await replicate.predictions.get(prediction.id);
 
-        // Wait for job to start
-        while (
-          output.status === "starting" &&
-          Date.now() - startTime < START_TIMEOUT
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          output = await replicate.predictions.get(prediction.id);
-        }
-
-        if (output.status === "starting") {
-          try {
-            await fetch(output.urls.cancel, {
-              method: "POST",
-              headers: {
-                Authorization: `Token ${process.env.REPLICATE_API_TOKEN}`,
-              },
-            });
-          } catch (cancelError) {
-            console.error("Error canceling prediction:", cancelError);
-          }
-          throw new Error("Speech generation took too long to start");
-        }
-
-        // Wait for processing with timeout
-        const processStartTime = Date.now();
-        let retryDelay = 1000;
-
-        while (
-          ["processing"].includes(output.status) &&
-          Date.now() - processStartTime < PROCESS_TIMEOUT
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, retryDelay));
-          output = await replicate.predictions.get(prediction.id);
-          retryDelay = Math.min(retryDelay * 1.5, 3000); // Cap at 3s instead of 5s
-        }
-
-        if (!output.output || output.status !== "succeeded") {
-          throw new Error(
-            `Failed to generate speech for chunk. Status: ${output.status}`
-          );
-        }
-
-        return Array.isArray(output.output) ? output.output[0] : output.output;
-      })
-    );
-
-    // Combine audio files if multiple chunks
-    let finalBuffer: Buffer;
-    if (outputs.length === 1) {
-      finalBuffer = Buffer.from(
-        await fetch(outputs[0]).then((res) => res.arrayBuffer())
-      );
-    } else {
-      // TODO: Implement audio concatenation for multiple chunks
-      // For now, just use the first chunk
-      finalBuffer = Buffer.from(
-        await fetch(outputs[0]).then((res) => res.arrayBuffer())
-      );
+    // Wait for job to start
+    while (
+      output.status === "starting" &&
+      Date.now() - startTime < START_TIMEOUT
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      output = await replicate.predictions.get(prediction.id);
     }
+
+    if (output.status === "starting") {
+      try {
+        await fetch(output.urls.cancel, {
+          method: "POST",
+          headers: {
+            Authorization: `Token ${process.env.REPLICATE_API_TOKEN}`,
+          },
+        });
+      } catch (cancelError) {
+        console.error("Error canceling prediction:", cancelError);
+      }
+      throw new Error("Speech generation took too long to start");
+    }
+
+    // Wait for processing with timeout
+    const processStartTime = Date.now();
+    let retryDelay = 1000;
+
+    while (
+      ["processing"].includes(output.status) &&
+      Date.now() - processStartTime < PROCESS_TIMEOUT
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      output = await replicate.predictions.get(prediction.id);
+      retryDelay = Math.min(retryDelay * 1.5, 3000);
+    }
+
+    if (!output.output || output.status !== "succeeded") {
+      throw new Error(`Failed to generate speech. Status: ${output.status}`);
+    }
+
+    const audioUrl = Array.isArray(output.output)
+      ? output.output[0]
+      : output.output;
+
+    // Download the audio
+    const response = await fetch(audioUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = Buffer.from(arrayBuffer);
 
     // Upload to Supabase Storage
     const fileName = `${user.id}/tts-${Date.now().toString()}.wav`;
     const { error: uploadError } = await supabase.storage
       .from("audio_recordings")
-      .upload(fileName, finalBuffer, {
+      .upload(fileName, audioBuffer, {
         contentType: "audio/wav",
       });
 
