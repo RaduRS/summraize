@@ -310,51 +310,6 @@ export default function VoiceAssistant() {
     }
   };
 
-  const generateTTS = async () => {
-    if (!result?.summary) return;
-
-    setIsTtsLoading(true);
-    try {
-      const response = await fetch("/api/text-to-speech", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: result.summary,
-          voice: "alloy",
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 402) {
-          setInsufficientCreditsData({
-            required: data.required,
-            available: data.available,
-          });
-          setShowInsufficientCreditsModal(true);
-          return;
-        }
-        throw new Error(data.details || "Failed to generate speech");
-      }
-
-      setTtsAudioUrl(data.audioUrl);
-      creditsEvent.emit();
-
-      // Show toast with actual cost
-      toast({
-        title: "Speech Generated",
-        description: `${Math.ceil(data.cost)} credits used`,
-      });
-    } catch (err: any) {
-      console.error("Error generating speech:", err);
-      alert(err.message || "Error generating speech. Please try again.");
-    } finally {
-      setIsTtsLoading(false);
-    }
-  };
-
   const generateSummary = async () => {
     try {
       // Calculate total required credits first
