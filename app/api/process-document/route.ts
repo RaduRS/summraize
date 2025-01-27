@@ -29,7 +29,7 @@ async function extractTextFromImage(buffer: Buffer): Promise<string> {
           content: [
             {
               type: "text",
-              text: "Extract and return only the text from this image. Return just the text, no additional commentary.",
+              text: "Extract and return only the text from this image. Format it with proper paragraphs and spacing. Return just the text, no additional commentary.",
             },
             {
               type: "image_url",
@@ -47,11 +47,66 @@ async function extractTextFromImage(buffer: Buffer): Promise<string> {
       throw new Error("No text extracted from image");
     }
 
-    return response.choices[0].message.content;
+    // Format the extracted text
+    let text = response.choices[0].message.content;
+    text = text
+      // Add paragraph breaks at natural points
+      .replace(
+        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+        ".\n\n$1 "
+      )
+      // Add paragraph break after introductions/greetings
+      .replace(
+        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+        "$1$2\n\n"
+      )
+      // Add paragraph break for new speakers or dialogue
+      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+      .replace(
+        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+        "$1\n\n$2"
+      )
+      // Normalize other spaces
+      .replace(/[^\S\n]+/g, " ")
+      // Remove excessive line breaks
+      .replace(/\n{3,}/g, "\n\n")
+      // Trim any leading/trailing whitespace
+      .trim();
+
+    return text;
   } catch (error) {
     console.error("OCR Error:", error);
     throw new Error("Failed to extract text from image");
   }
+}
+
+// Also add text formatting for PDF text
+function formatExtractedText(text: string): string {
+  return (
+    text
+      // Add paragraph breaks at natural points
+      .replace(
+        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+        ".\n\n$1 "
+      )
+      // Add paragraph break after introductions/greetings
+      .replace(
+        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+        "$1$2\n\n"
+      )
+      // Add paragraph break for new speakers or dialogue
+      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+      .replace(
+        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+        "$1\n\n$2"
+      )
+      // Normalize other spaces
+      .replace(/[^\S\n]+/g, " ")
+      // Remove excessive line breaks
+      .replace(/\n{3,}/g, "\n\n")
+      // Trim any leading/trailing whitespace
+      .trim()
+  );
 }
 
 // Mark as server-side route
@@ -102,8 +157,8 @@ export async function POST(request: Request) {
           throw new Error(data.error || "Failed to process PDF");
         }
 
-        text = data.text;
-        console.log("PDF text extracted, length:", text.length);
+        text = formatExtractedText(data.text);
+        console.log("PDF text extracted and formatted, length:", text.length);
       } catch (error) {
         console.error("PDF processing error:", error);
         throw new Error("Failed to process PDF document");
@@ -112,19 +167,20 @@ export async function POST(request: Request) {
       const buffer = Buffer.from(await file.arrayBuffer());
       text = await extractTextFromImage(buffer);
     } else if (file.type === "text/plain") {
-      text = await file.text();
+      text = formatExtractedText(await file.text());
     } else {
-      text = await file.text();
+      text = formatExtractedText(await file.text());
     }
 
-    // Clean up the text formatting
+    // Clean up the text formatting but preserve paragraphs
     const cleanText = text
       .replace(/([a-z])([A-Z])/g, "$1 $2") // Add space between camelCase
-      .replace(/\s+/g, " ") // Normalize spaces
+      .replace(/[^\S\n]+/g, " ") // Normalize spaces but preserve line breaks
+      .replace(/\n{3,}/g, "\n\n") // Ensure max two line breaks
       .trim();
 
     // When actually processing and charging
-    const wordCount = cleanText.trim().split(/\s+/).length;
+    const wordCount = cleanText.replace(/\s+/g, " ").trim().split(/\s+/).length;
     const actualCost = Math.ceil(
       estimateCosts({
         textLength: wordCount,
