@@ -4,7 +4,11 @@ import { estimateCosts } from "@/utils/cost-calculator";
 
 // Initialize Deepseek client
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL;
+const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL as string;
+
+if (!DEEPSEEK_API_URL) {
+  throw new Error("DEEPSEEK_API_URL is not configured");
+}
 
 export async function POST(request: Request) {
   try {
@@ -55,7 +59,7 @@ export async function POST(request: Request) {
         messages: [
           {
             role: "system",
-            content: "Create a concise summary of the following text.",
+            content: `You are a skilled summarizer who creates natural, conversational summaries. Adapt your summary length based on the input: be brief for short texts, more detailed for longer ones, but always maintain a natural flow. Focus on the essential information and present it as if you're explaining it to someone, without using bullet points, asterisks, or section markers. The summary should read like a cohesive narrative that a human would speak naturally.`,
           },
           {
             role: "user",
