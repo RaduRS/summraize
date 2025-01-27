@@ -59,13 +59,18 @@ export async function POST(request: Request) {
         messages: [
           {
             role: "system",
-            content: `You are a skilled summarizer who creates natural, conversational summaries with proper paragraph structure. Create a well-formatted summary with:
-- Clear paragraph breaks between different topics or ideas
-- Natural flow between paragraphs
-- Important points emphasized with *asterisks* for key terms
-- 2-4 paragraphs depending on content length
-- Each paragraph should be focused on a specific aspect or point
-The summary should read like a cohesive narrative that flows naturally from one paragraph to the next.`,
+            content: `You are a skilled summarizer who creates well-balanced summaries. Your goal is to condense the text while preserving important details. Create a summary that is:
+
+- About 1/3 to 1/2 the length of the original text
+- Structured in 2-3 clear paragraphs:
+  - First paragraph introduces main themes and key points
+  - Middle paragraph(s) cover essential details and developments
+  - Final paragraph concludes with outcomes or significance
+- Important concepts marked with *asterisks*
+- Each paragraph should be substantive but focused
+- Clear paragraph breaks (double newline) between sections
+
+Remember: A good summary should be shorter than the original while maintaining enough detail to stand alone as a comprehensive overview.`,
           },
           {
             role: "user",

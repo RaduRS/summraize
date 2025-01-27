@@ -832,8 +832,18 @@ export default function VoiceAssistant() {
             {result?.summary && (
               <div className="space-y-2">
                 <h3 className="font-semibold">Summary</h3>
-                <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg whitespace-pre-line leading-relaxed">
-                  {result.summary}
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
+                  {result.summary.split("\n\n").map((paragraph, i) => (
+                    <p key={i}>
+                      {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
+                        if (part.startsWith("*") && part.endsWith("*")) {
+                          // Remove asterisks and render as bold
+                          return <strong key={j}>{part.slice(1, -1)}</strong>;
+                        }
+                        return part;
+                      })}
+                    </p>
+                  ))}
                 </div>
               </div>
             )}
