@@ -1,25 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import OpenAI from "openai";
 import { estimateCosts } from "@/utils/cost-calculator";
+import Replicate from "replicate";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  defaultQuery: { timeout_ms: "0" },
-  defaultHeaders: { "app-name": "summraize" },
+// Initialize Replicate client
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN,
 });
-
-// Available OpenAI voices
-export const VOICES = {
-  alloy: "Alloy - Neutral and balanced",
-  echo: "Echo - Warm and rounded",
-  fable: "Fable - British and proper",
-  onyx: "Onyx - Deep and authoritative",
-  nova: "Nova - Energetic and bright",
-  shimmer: "Shimmer - Clear and expressive",
-} as const;
-
-export type VoiceOption = keyof typeof VOICES;
 
 export const config = {
   runtime: "nodejs",
@@ -28,14 +15,10 @@ export const config = {
 
 export async function POST(request: Request) {
   try {
-    const { text, voice = "alloy" } = await request.json();
+    const { text } = await request.json();
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
-    }
-
-    if (!Object.keys(VOICES).includes(voice)) {
-      return NextResponse.json({ error: "Invalid voice" }, { status: 400 });
     }
 
     // Calculate estimated cost
@@ -72,36 +55,58 @@ export async function POST(request: Request) {
       );
     }
 
-    // Deduct credits
-    const { data: updatedCredits, error: updateError } = await supabase
-      .from("user_credits")
-      .update({ credits: credits.credits - costs.total })
-      .eq("user_id", user.id)
-      .select("credits")
-      .single();
-
-    if (updateError) {
-      throw new Error("Failed to update credits");
-    }
-
-    // Calculate credits deducted
-    const creditsDeducted = credits.credits - updatedCredits.credits;
-
-    // Generate speech using OpenAI TTS
-    const mp3 = await openai.audio.speech.create({
-      model: "tts-1",
-      voice,
-      input: text,
+    // Generate speech using Kokoro
+    const prediction = await replicate.predictions.create({
+      version:
+        "dfdf537ba482b029e0a761699e6f55e9162cfd159270bfe0e44857caa5f275a6",
+      input: {
+        text,
+        speed: 1.1,
+        voice: "af",
+      },
     });
 
-    const buffer = Buffer.from(await mp3.arrayBuffer());
+    // Calculate timeout based on text length (minimum 60s, maximum 300s)
+    // Assuming processing takes ~1 second per 100 words
+    const wordsCount = text.split(/\s+/).length;
+    const dynamicTimeout = Math.min(300000, Math.max(60000, wordsCount * 10));
+
+    // Wait for the prediction to complete
+    let output = await replicate.predictions.get(prediction.id);
+    const startTime = Date.now();
+
+    while (
+      output.status === "processing" &&
+      Date.now() - startTime < dynamicTimeout
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      output = await replicate.predictions.get(prediction.id);
+    }
+
+    if (output.status !== "succeeded" || !output.output) {
+      throw new Error(
+        `Failed to generate speech: ${output.error || "Status: " + output.status}`
+      );
+    }
+
+    const audioUrl = Array.isArray(output.output)
+      ? output.output[0]
+      : output.output;
+
+    if (!audioUrl || typeof audioUrl !== "string") {
+      throw new Error("Invalid audio URL from Replicate API");
+    }
 
     // Upload to Supabase Storage
-    const fileName = `${user.id}/tts-${Date.now().toString()}.mp3`;
+    const buffer = Buffer.from(
+      await fetch(audioUrl).then((res) => res.arrayBuffer())
+    );
+    const fileName = `${user.id}/tts-${Date.now().toString()}.wav`;
+
     const { error: uploadError } = await supabase.storage
       .from("audio_recordings")
       .upload(fileName, buffer, {
-        contentType: "audio/mpeg",
+        contentType: "audio/wav",
       });
 
     if (uploadError) {
@@ -116,6 +121,21 @@ export async function POST(request: Request) {
     if (!urlData?.signedUrl) {
       throw new Error("Failed to generate signed URL");
     }
+
+    // Update credits
+    const { data: updatedCredits, error: updateError } = await supabase
+      .from("user_credits")
+      .update({ credits: credits.credits - costs.total })
+      .eq("user_id", user.id)
+      .select("credits")
+      .single();
+
+    if (updateError) {
+      throw new Error("Failed to update credits");
+    }
+
+    // Calculate credits deducted
+    const creditsDeducted = credits.credits - updatedCredits.credits;
 
     return NextResponse.json({
       audioUrl: urlData.signedUrl,
