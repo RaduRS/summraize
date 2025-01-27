@@ -20,12 +20,14 @@ export function CostButton({
   disabled,
   ...props
 }: CostButtonProps) {
+  const isDisabled = disabled || isLoading || cost === 0;
+
   return (
     <Button
       variant="outline"
       size="lg"
       className={cn("flex flex-col py-6 h-auto gap-1", className)}
-      disabled={isLoading || disabled}
+      disabled={isDisabled}
       {...props}
     >
       {isLoading ? (
