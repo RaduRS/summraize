@@ -1,6 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
-import { calculateOperationCosts } from "@/utils/cost-calculator";
+import { calculateOperationCosts, COST_RATES } from "@/utils/cost-calculator";
 import pdf from "pdf-parse-fork";
 
 export async function POST(request: Request) {
@@ -15,19 +15,23 @@ export async function POST(request: Request) {
 
     let wordCount = 0;
     let isEstimate = false;
+    let charCount = 0;
 
     // Get actual word count for text files, estimate for others
     if (file.type === "text/plain") {
       const text = Buffer.from(await file.arrayBuffer()).toString("utf-8");
       wordCount = text.trim().split(/\s+/).length;
-      isEstimate = true;
+      const charCount = text.length;
+      isEstimate = false;
     } else if (file.type === "application/pdf") {
       try {
         // Try to get actual word count for PDFs
         const buffer = Buffer.from(await file.arrayBuffer());
         const data = await pdf(buffer);
-        wordCount = data.text.trim().split(/\s+/).length;
-        isEstimate = true;
+        const text = data.text.trim();
+        wordCount = text.split(/\s+/).length;
+        const charCount = text.length;
+        isEstimate = false;
       } catch (error) {
         // Fallback to size-based estimation if PDF parsing fails
         const fileSizeInMB = file.size / (1024 * 1024);
@@ -77,9 +81,32 @@ export async function POST(request: Request) {
       : wordCount;
 
     // Calculate costs for each operation
-    const transcriptionCost = calculateOperationCosts(wordCount, "transcribe");
-    const summarizationCost = calculateOperationCosts(wordCount, "summarize");
-    const ttsCost = calculateOperationCosts(wordCount, "tts");
+    const isPdfOrText =
+      file.type === "application/pdf" || file.type === "text/plain";
+    const isImage = file.type.startsWith("image/");
+
+    // For PDFs and text files, charge flat fee plus additional operations
+    const transcriptionCost = isImage
+      ? calculateOperationCosts(costWordCount, "transcribe", true)
+      : isPdfOrText
+        ? COST_RATES.pdf_processing // Flat fee for PDF/TXT
+        : calculateOperationCosts(costWordCount, "transcribe");
+
+    // For summarization, pass the actual character count if available
+    const summarizationCost = calculateOperationCosts(
+      costWordCount,
+      "summarize",
+      false,
+      charCount // Pass actual char count if available
+    );
+
+    // For TTS, pass the actual character count if available
+    const ttsCost = calculateOperationCosts(
+      costWordCount,
+      "tts",
+      false,
+      charCount // Pass actual char count if available
+    );
 
     // Return combined costs for different operations
     return NextResponse.json({
@@ -88,7 +115,7 @@ export async function POST(request: Request) {
       estimateRange,
       costs: {
         transcription: transcriptionCost,
-        fullText: transcriptionCost + ttsCost, // Transcribe + TTS
+        fullText: transcriptionCost + ttsCost, // PDF/OCR + TTS
         summary: transcriptionCost + summarizationCost + ttsCost, // All operations
       },
     });

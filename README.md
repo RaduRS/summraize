@@ -1,38 +1,59 @@
-Main objective: i want to create an ai app that will have 2 primarily functions, 1 will be that user will record or upload voice recordings and ai will give a summarize in text or and voice and 2 function is that user uploads a page from a book so an image and ai will give back that text in electronic format or and spoken so recording.
+Look in my @codebase to catch up if you need to.
+We need to update the both backend and front probably to reflect this changes
 
-Stack
-Next.js (Frontend + API Routes)
 
-Handles UI, file uploads, and API logic.
+Task: Build a Token-Based Credit System
+Goal: We need to design a credit-based pricing system for the app where user actions are priced in credits instead of dollars. The credits will reflect operational costs, include a profit margin, and allow scalability.
 
-Serverless API routes simplify backend integration.
+Conversion:
+1,000 credits = $1.00
+Current Pricing and APIs:
+1. Voice Assistant
+a. Audio to Text
 
-Great for SSR/static pages and React-based UIs.
+API: Deepgram
+Cost: $0.0043/min.
+Billing Rules:
+Charged as a full minute even if under 60 seconds (e.g., 1:01 = 2 mins = $0.0086).
+b. Text Summarization
 
-Supabase (Backend Services)
+API: DeepSeek
+Costs:
+Input tokens: $0.14 per 1M tokens.
+Input tokens (cache miss): $0.55 per 1M tokens.
+Output tokens: $2.19 per 1M tokens.
+c. Text-to-Speech (TTS)
 
-PostgreSQL Database: Store user data, processed text, and metadata.
+API: Google Cloud TTS
+Cost: $0.000004 per character (or $4 per 1M characters).
+2. Document Converter
+a. Image to Text
 
-Storage: Handle file uploads (voice recordings, book page images).
+API: OpenAI GPT-4o-Mini
+Costs:
+$0.005 per image.
+I think pdf and txt are free becasue we do it internally (can you confirm at the end)
+b. Full Text-to-Speech
 
-Auth: Built-in user authentication.
+API: Google Cloud TTS
+Cost: Same as above: $0.000004 per character.
+c. Summary-to-Speech
 
-Edge Functions: Run serverless AI processing (optional).
+Flow:
+Generate the summary (DeepSeek, costs as above).
+Convert the summary to speech (Google Cloud TTS, costs as above).
+Pricing Strategy:
+To ensure profitability while covering operational costs:
 
-AI/ML Tools
+Set a Markup Factor: Multiply your costs by 3x to 5x.
 
-Speech-to-Text (STT): OpenAI Whisper (open-source) or AWS Transcribe.
+Example: If the service costs you 10 credits, charge the user 30-50 credits.
+Estimate Costs in Credits:
+Convert all dollar-based costs into credits using 1,000 credits = $1:
 
-OCR: Tesseract.js (free) or Google Cloud Vision (higher accuracy).
+Example: $0.0043/min = 4.3 credits/min.
+Add your markup. For 4x markup, charge 17.2 credits/min for audio transcription.
+Adjust for Usability:
 
-Text Summarization: OpenAI GPT-4/3.5-turbo or Hugging Face models.
+Round off credit costs for simplicity (e.g., 17.2 credits → 18 credits).
 
-Text-to-Speech (TTS): ElevenLabs (best quality) or AWS Polly.
-
-I want the most cost effective solution because this project is MVP.
-
-the recordings will be audio only no video
-
-So maybe I can use deepseek API (because its cheaper) or Open AI api.
-
-I will need the code to integrate all of this.
