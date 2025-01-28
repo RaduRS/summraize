@@ -609,7 +609,7 @@ export default function VoiceAssistant() {
                   isTtsLoading ||
                   !!result?.transcription
                 }
-                isLoading={isProcessing}
+                isLoading={!result?.transcription && isProcessing}
                 cost={
                   result?.transcription
                     ? undefined
@@ -628,7 +628,7 @@ export default function VoiceAssistant() {
                   isTtsLoading ||
                   !!result?.summary
                 }
-                isLoading={isSummaryLoading}
+                isLoading={!result?.summary && isSummaryLoading}
                 cost={result?.summary ? undefined : getRemainingCost("summary")}
                 className="w-[180px]"
               >
@@ -774,7 +774,7 @@ export default function VoiceAssistant() {
                   isTtsLoading ||
                   !!ttsAudioUrl
                 }
-                isLoading={isTtsLoading}
+                isLoading={!ttsAudioUrl && isTtsLoading}
                 cost={ttsAudioUrl ? undefined : getRemainingCost("speech")}
                 className="w-[180px]"
               >
