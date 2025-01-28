@@ -221,9 +221,16 @@ export async function POST(
 
     // Calculate word count and cost
     const wordCount = cleanText.replace(/\s+/g, " ").trim().split(/\s+/).length;
+    const charCount = cleanText.length;
+    const isPdfOrText =
+      file.type === "application/pdf" || file.type === "text/plain";
+
     const actualCost = Math.ceil(
       estimateCosts({
         textLength: wordCount,
+        isImageOcr: file.type.startsWith("image/"),
+        isPdfOrText: isPdfOrText,
+        summaryLength: mode === "summary" ? charCount : undefined,
       }).total
     );
 
