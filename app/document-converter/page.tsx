@@ -16,11 +16,10 @@ import { estimateCosts } from "@/utils/cost-calculator";
 import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
 import { useToast } from "@/hooks/use-toast";
-import { downloadAudio } from "@/utils/audio-helpers";
 
 interface ProcessingResult {
   text: string;
-  wordCount: number;
+  summary?: string;
 }
 
 interface FileAnalysis {
@@ -192,22 +191,13 @@ export default function DocumentConverter() {
         throw new Error(data2.error || "Failed to process document");
       }
 
-      setResult({
-        text: data2.text,
-        wordCount: data2.wordCount,
-      });
+      setResult({ text: data2.text });
       creditsEvent.emit();
 
-      // Show toast with credits deducted and cost details
+      // Show toast with credits deducted
       toast({
         title: "Operation Complete",
-        description: (
-          <div className="space-y-2">
-            <p>
-              {data2.creditsDeducted} credits were deducted from your account
-            </p>
-          </div>
-        ),
+        description: `${data2.creditsDeducted} credits were deducted from your account`,
       });
     } catch (error: any) {
       console.error("Error processing document:", error);
@@ -244,7 +234,7 @@ export default function DocumentConverter() {
       }
 
       let currentText = result?.text;
-      let summaryText = result?.text;
+      let summaryText = result?.summary;
       let totalCreditsDeducted = 0;
 
       // First transcribe if needed
@@ -272,12 +262,12 @@ export default function DocumentConverter() {
         }
 
         currentText = data.text;
-        setResult({ text: data.text, wordCount: data.wordCount });
+        setResult({ text: data.text });
         totalCreditsDeducted += data.creditsDeducted;
       }
 
       // Generate summary if needed
-      if (mode === "summary" && !result?.text) {
+      if (mode === "summary" && !result?.summary) {
         setIsSummaryLoading(true);
         const summaryResponse = await fetch("/api/summarize", {
           method: "POST",
@@ -299,7 +289,7 @@ export default function DocumentConverter() {
         }
         summaryText = summaryData.summary;
         setResult((prev) =>
-          prev ? { ...prev, text: summaryData.summary } : null
+          prev ? { ...prev, summary: summaryData.summary } : null
         );
         totalCreditsDeducted += summaryData.creditsDeducted;
       }
@@ -500,44 +490,83 @@ export default function DocumentConverter() {
               </CostButton>
             </div>
 
-            {result && (
+            {result?.text && (
               <div className="space-y-2">
-                <h3 className="font-semibold">Extracted Text</h3>
-                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg whitespace-pre-line">
-                  {result.text}
+                <h3 className="font-semibold">Document Text</h3>
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
+                  {result.text.split("\n\n").map((paragraph, i) => (
+                    <p key={i}>
+                      {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
+                        if (part.startsWith("*") && part.endsWith("*")) {
+                          // Remove asterisks and render as bold
+                          return <strong key={j}>{part.slice(1, -1)}</strong>;
+                        }
+                        return part;
+                      })}
+                    </p>
+                  ))}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Word count: {result.wordCount.toLocaleString()}
-                </div>
+                {fullTextAudioUrl && (
+                  <div className="rounded-lg border bg-card p-4 mt-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-sm text-muted-foreground">
+                        Full Text Audio
+                      </h4>
+                      <Button
+                        onClick={() => window.open(fullTextAudioUrl)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <AudioPlayer
+                      src={fullTextAudioUrl}
+                      onError={() => alert("Error loading audio")}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
-            {fullTextAudioUrl && (
-              <div className="rounded-lg border bg-card p-4 mt-2">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-sm text-muted-foreground">
-                    Full Text Audio
-                  </h4>
-                  <Button
-                    onClick={() => {
-                      if (fullTextAudioUrl) {
-                        downloadAudio(
-                          fullTextAudioUrl,
-                          `full-text-${Date.now()}.mp3`
-                        );
-                      }
-                    }}
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
+            {result?.summary && (
+              <div className="space-y-2">
+                <h3 className="font-semibold">Summary</h3>
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
+                  {result.summary.split("\n\n").map((paragraph, i) => (
+                    <p key={i}>
+                      {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
+                        if (part.startsWith("*") && part.endsWith("*")) {
+                          // Remove asterisks and render as bold
+                          return <strong key={j}>{part.slice(1, -1)}</strong>;
+                        }
+                        return part;
+                      })}
+                    </p>
+                  ))}
                 </div>
-                <AudioPlayer
-                  src={fullTextAudioUrl}
-                  onError={() => alert("Error loading audio")}
-                />
+                {summaryAudioUrl && (
+                  <div className="rounded-lg border bg-card p-4 mt-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-sm text-muted-foreground">
+                        Summary Audio
+                      </h4>
+                      <Button
+                        onClick={() => window.open(summaryAudioUrl)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <AudioPlayer
+                      src={summaryAudioUrl}
+                      onError={() => alert("Error loading audio")}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
