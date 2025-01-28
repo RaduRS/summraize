@@ -461,8 +461,13 @@ export default function DocumentConverter() {
             <div className="flex justify-between gap-4">
               <CostButton
                 onClick={transcribe}
-                disabled={Boolean(isProcessing || result?.text)}
-                isLoading={isProcessing}
+                disabled={Boolean(
+                  isProcessing ||
+                    isSummaryLoading ||
+                    isTtsLoading ||
+                    result?.text
+                )}
+                isLoading={isProcessing && !result?.text}
                 cost={result?.text ? undefined : getRemainingCost("transcribe")}
                 className="w-[180px]"
               >
@@ -471,8 +476,15 @@ export default function DocumentConverter() {
 
               <CostButton
                 onClick={() => handleGenerateSpeech("full")}
-                disabled={Boolean(isProcessing || fullTextAudioUrl)}
-                isLoading={isTtsLoading}
+                disabled={Boolean(
+                  isProcessing ||
+                    isSummaryLoading ||
+                    isTtsLoading ||
+                    fullTextAudioUrl
+                )}
+                isLoading={
+                  isTtsLoading && !fullTextAudioUrl && !isSummaryLoading
+                }
                 cost={fullTextAudioUrl ? undefined : getRemainingCost("full")}
                 className="w-[180px]"
               >
@@ -481,8 +493,13 @@ export default function DocumentConverter() {
 
               <CostButton
                 onClick={() => handleGenerateSpeech("summary")}
-                disabled={Boolean(isProcessing || summaryAudioUrl)}
-                isLoading={isSummaryLoading}
+                disabled={Boolean(
+                  isProcessing ||
+                    isSummaryLoading ||
+                    isTtsLoading ||
+                    summaryAudioUrl
+                )}
+                isLoading={isSummaryLoading && !summaryAudioUrl}
                 cost={summaryAudioUrl ? undefined : getRemainingCost("summary")}
                 className="w-[180px]"
               >
