@@ -14,10 +14,7 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    console.log("Starting PDF processing...");
-
     const data = await pdf(buffer);
-    console.log(`PDF processed, ${data.numpages} pages`);
 
     if (!data.text.trim()) {
       throw new Error("No text content extracted from PDF");

@@ -12,8 +12,6 @@ export function estimateCosts(params: {
   textLength?: number; // in characters
   summaryLength?: number; // estimated summary length in characters
 }) {
-  console.log("Cost Calculator Input:", params);
-
   const costs = {
     transcription: 0,
     summarization: 0,
@@ -46,13 +44,6 @@ export function estimateCosts(params: {
     costs.summarization =
       (inputTokens * COST_RATES.summarization.input) / 1000 +
       (outputTokens * COST_RATES.summarization.output) / 1000;
-
-    console.log("Summarization cost:", {
-      inputTokens,
-      outputTokens,
-      summaryRatio,
-      cost: costs.summarization,
-    });
   }
 
   if (params.summaryLength) {
@@ -63,12 +54,6 @@ export function estimateCosts(params: {
     const bufferedLength = Math.ceil(params.summaryLength * 1.1);
     const roundedLength = Math.ceil(bufferedLength / 100) * 100;
     costs.tts = (roundedLength * COST_RATES.tts) / 1000;
-    console.log("TTS cost:", {
-      chars: params.summaryLength,
-      bufferedLength,
-      roundedLength,
-      cost: costs.tts,
-    });
   }
 
   // Round each cost component up to nearest credit
@@ -76,8 +61,6 @@ export function estimateCosts(params: {
   costs.summarization = Math.ceil(costs.summarization);
   costs.tts = Math.ceil(costs.tts);
   costs.total = costs.transcription + costs.summarization + costs.tts;
-
-  console.log("Final costs:", costs);
 
   return costs;
 }
