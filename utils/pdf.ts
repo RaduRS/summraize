@@ -9,7 +9,6 @@ export async function extractTextFromPDF(
   try {
     // Convert Buffer to Uint8Array
     const data = Buffer.isBuffer(buffer) ? buffer : new Uint8Array(buffer);
-    console.log("Processing PDF, buffer size:", data.length);
 
     // Load the PDF document
     const doc = await pdfjsLib.getDocument({
@@ -18,7 +17,6 @@ export async function extractTextFromPDF(
       standardFontDataUrl: "",
     }).promise;
 
-    console.log("PDF loaded, pages:", doc.numPages);
     let fullText = "";
 
     // Extract text from each page

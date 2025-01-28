@@ -21,6 +21,7 @@ import {
 import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
 import { useToast } from "@/hooks/use-toast";
+import { downloadAudio } from "@/utils/audio-helpers";
 
 interface ProcessingResult {
   transcription: string;
@@ -566,7 +567,13 @@ export default function VoiceAssistant() {
                     : ""}
                 </h4>
                 <Button
-                  onClick={() => window.open(URL.createObjectURL(audioBlob))}
+                  onClick={() => {
+                    if (audioBlob) {
+                      const url = URL.createObjectURL(audioBlob);
+                      downloadAudio(url, `recording-${Date.now()}.wav`);
+                      URL.revokeObjectURL(url);
+                    }
+                  }}
                   variant="ghost"
                   size="sm"
                   className="h-8 w-8 p-0"
@@ -810,7 +817,11 @@ export default function VoiceAssistant() {
                     Summary Audio
                   </h4>
                   <Button
-                    onClick={() => window.open(ttsAudioUrl)}
+                    onClick={() => {
+                      if (ttsAudioUrl) {
+                        downloadAudio(ttsAudioUrl, `summary-${Date.now()}.mp3`);
+                      }
+                    }}
                     variant="ghost"
                     size="sm"
                     className="h-8 w-8 p-0"
