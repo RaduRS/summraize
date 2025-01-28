@@ -11,7 +11,7 @@ export const COST_RATES = {
     output: 8.76,
   },
   // Google Cloud TTS: $0.000004 per char = 4 credits per 1M chars = 0.004 credits per 1K chars * 4x = 0.016
-  tts: 0.016,
+  tts: 0.032,
   // GPT-4-Vision Mini: $0.005 per image = 5 credits * 4x = 20 credits
   image_ocr: 20,
   // Flat fee for PDF/TXT processing (local processing)

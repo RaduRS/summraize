@@ -6,6 +6,17 @@ import pdf from "pdf-parse-fork";
 export async function POST(request: Request) {
   try {
     const supabase = createClient(request);
+
+    // Add auth check
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File;
 
@@ -21,7 +32,7 @@ export async function POST(request: Request) {
     if (file.type === "text/plain") {
       const text = Buffer.from(await file.arrayBuffer()).toString("utf-8");
       wordCount = text.trim().split(/\s+/).length;
-      const charCount = text.length;
+      charCount = text.length; // Use the top-level charCount
       isEstimate = false;
     } else if (file.type === "application/pdf") {
       try {
@@ -30,7 +41,7 @@ export async function POST(request: Request) {
         const data = await pdf(buffer);
         const text = data.text.trim();
         wordCount = text.split(/\s+/).length;
-        const charCount = text.length;
+        charCount = text.length; // Use the top-level charCount
         isEstimate = false;
       } catch (error) {
         // Fallback to size-based estimation if PDF parsing fails
@@ -65,6 +76,8 @@ export async function POST(request: Request) {
       }
 
       isEstimate = true;
+      // For images and other files, estimate charCount based on wordCount
+      charCount = wordCount * 5; // Rough estimate of 5 chars per word
     }
 
     // Adjust confidence range to be less aggressive

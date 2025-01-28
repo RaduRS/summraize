@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/utils/supabase/server";
 import * as pdfjsLib from "pdfjs-dist";
 import sharp from "sharp";
 import { createCanvas } from "canvas";
@@ -10,6 +11,17 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    // Add auth check
+    const supabase = createClient(request);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File;
 
