@@ -147,12 +147,15 @@ export async function POST(
     if (file.type === "application/pdf") {
       try {
         console.log("Processing PDF file:", file.name);
-        // Forward to dedicated PDF endpoint
+        // Forward to dedicated PDF endpoint with auth cookie
         const formData = new FormData();
         formData.append("file", file);
         const response = await fetch(new URL("/api/process-pdf", request.url), {
           method: "POST",
           body: formData,
+          headers: {
+            cookie: request.headers.get("cookie") || "",
+          },
         });
         const data = await response.json();
         if (!response.ok) {
@@ -227,7 +230,7 @@ export async function POST(
 
     const actualCost = Math.ceil(
       estimateCosts({
-        textLength: wordCount,
+        textLength: charCount,
         isImageOcr: file.type.startsWith("image/"),
         isPdfOrText: isPdfOrText,
         summaryLength: mode === "summary" ? charCount : undefined,
