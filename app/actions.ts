@@ -7,7 +7,11 @@ import { redirect } from "next/navigation";
 
 async function getRequest() {
   const headersList = await headers();
-  return new Request("/", { headers: headersList });
+  // Convert headers to a plain object for logging
+  const headersObj = Object.fromEntries(headersList.entries());
+  console.log("📡 Headers received in getRequest():", headersObj);
+  const origin = headersList.get("origin") || "http://localhost:3000";
+  return new Request(origin, { headers: headersList });
 }
 
 export const signUpAction = async (formData: FormData) => {
@@ -58,7 +62,7 @@ export const signInAction = async (formData: FormData) => {
     return encodedRedirect("error", "/sign-in", error.message);
   }
 
-  return redirect("/notes");
+  return redirect("/");
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
