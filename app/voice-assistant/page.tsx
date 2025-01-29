@@ -684,31 +684,35 @@ export default function VoiceAssistant() {
                       totalCreditsDeducted += data.creditsDeducted;
                     }
 
-                    // Step 2: Generate summary
-                    setIsSummaryLoading(true);
-                    const summaryResponse = await fetch("/api/summarize", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ text: transcription }),
-                    });
-                    const summaryData = await summaryResponse.json();
-                    if (!summaryResponse.ok) {
-                      if (summaryResponse.status === 402) {
-                        setInsufficientCreditsData({
-                          required: summaryData.required,
-                          available: summaryData.available,
-                        });
-                        setShowInsufficientCreditsModal(true);
-                        return;
+                    // Step 2: Generate summary if needed
+                    let summaryText = result?.summary;
+                    if (!summaryText) {
+                      setIsSummaryLoading(true);
+                      const summaryResponse = await fetch("/api/summarize", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ text: transcription }),
+                      });
+                      const summaryData = await summaryResponse.json();
+                      if (!summaryResponse.ok) {
+                        if (summaryResponse.status === 402) {
+                          setInsufficientCreditsData({
+                            required: summaryData.required,
+                            available: summaryData.available,
+                          });
+                          setShowInsufficientCreditsModal(true);
+                          return;
+                        }
+                        throw new Error(
+                          summaryData.error || "Failed to generate summary"
+                        );
                       }
-                      throw new Error(
-                        summaryData.error || "Failed to generate summary"
+                      summaryText = summaryData.summary;
+                      setResult((prev) =>
+                        prev ? { ...prev, summary: summaryData.summary } : null
                       );
+                      totalCreditsDeducted += summaryData.creditsDeducted;
                     }
-                    setResult((prev) =>
-                      prev ? { ...prev, summary: summaryData.summary } : null
-                    );
-                    totalCreditsDeducted += summaryData.creditsDeducted;
 
                     // Step 3: Generate speech
                     setIsTtsLoading(true);
@@ -716,10 +720,10 @@ export default function VoiceAssistant() {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        text: summaryData.summary,
-                        voice: "alloy",
+                        text: summaryText,
                       }),
                     });
+
                     const ttsData = await ttsResponse.json();
                     if (!ttsResponse.ok) {
                       if (ttsResponse.status === 402) {

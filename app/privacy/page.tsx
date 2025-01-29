@@ -12,9 +12,13 @@ export default function PrivacyPolicy() {
             <section>
               <h2 className="text-xl font-semibold mb-4">1. Introduction</h2>
               <p>
-                Welcome to Summraize. This Privacy Policy explains how we
-                collect, use, disclose, and safeguard your information when you
-                use our service.
+                Welcome to{" "}
+                <span className="font-bold">
+                  summr
+                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                </span>
+                . This Privacy Policy explains how we collect, use, disclose,
+                and safeguard your information when you use our service.
               </p>
             </section>
 
@@ -94,7 +98,12 @@ export default function PrivacyPolicy() {
               <h2 className="text-xl font-semibold mb-4">7. Contact Us</h2>
               <p>
                 If you have any questions about this Privacy Policy, please
-                contact us at support@summraize.com
+                contact us at{" "}
+                <span className="font-bold">
+                  support@summr
+                  <span className="text-blue-500 dark:text-blue-400">ai</span>
+                  ze.com
+                </span>
               </p>
             </section>
 
