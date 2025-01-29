@@ -4,6 +4,8 @@ import { encodedRedirect } from "@/utils/utils";
 import { createClient } from "@/utils/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { NextResponse } from "next/server";
+import { createServerActionClient } from "@/utils/supabase/server";
 
 async function getRequest() {
   const headersList = await headers();
@@ -11,6 +13,7 @@ async function getRequest() {
   const headersObj = Object.fromEntries(headersList.entries());
   console.log("📡 Headers received in getRequest():", headersObj);
   const origin = headersList.get("origin") || "http://localhost:3000";
+  console.log("🌐 Origin:", origin);
   return new Request(origin, { headers: headersList });
 }
 
@@ -48,22 +51,30 @@ export const signUpAction = async (formData: FormData) => {
   }
 };
 
-export const signInAction = async (formData: FormData) => {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const supabase = createClient(await getRequest());
+export async function signInAction(formData: FormData) {
+  const supabase = await createServerActionClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  const data = {
+    email: formData.get("email") as string,
+    password: formData.get("password") as string,
+  };
+
+  const { error, data: authData } =
+    await supabase.auth.signInWithPassword(data);
 
   if (error) {
-    return encodedRedirect("error", "/sign-in", error.message);
+    console.error("Sign in error:", error);
+    return { error: error.message };
   }
 
+  if (!authData?.session) {
+    console.error("No session after sign in");
+    return { error: "Authentication failed" };
+  }
+
+  console.log("Sign in successful, session established");
   return redirect("/");
-};
+}
 
 export const forgotPasswordAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -137,7 +148,20 @@ export const resetPasswordAction = async (formData: FormData) => {
 };
 
 export const signOutAction = async () => {
-  const supabase = createClient(await getRequest());
-  await supabase.auth.signOut();
-  return redirect("/sign-in");
+  console.log("🚪 Starting sign out process...");
+  try {
+    const supabase = createClient(await getRequest());
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error("❌ Sign out error:", error);
+      return encodedRedirect("error", "/", "Failed to sign out properly");
+    }
+
+    console.log("✅ Sign out successful");
+    return redirect("/sign-in");
+  } catch (e) {
+    console.error("🔥 Unexpected error during sign out:", e);
+    return redirect("/sign-in");
+  }
 };
