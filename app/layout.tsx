@@ -1,11 +1,7 @@
-import DeployButton from "@/components/deploy-button";
-import { EnvVarWarning } from "@/components/env-var-warning";
 import HeaderAuth from "@/components/header-auth";
 import { Footer } from "@/components/footer";
-import { hasEnvVars } from "@/utils/supabase/check-env-vars";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import Link from "next/link";
 import { NavigationTabs } from "@/components/navigation-tabs";
 import "./globals.css";
 import { CreditsDisplay } from "@/components/credits-display";
@@ -51,7 +47,7 @@ export default function RootLayout({
                   </div>
                   <div className="flex items-center gap-4">
                     <CreditsDisplay />
-                    {!hasEnvVars ? <EnvVarWarning /> : <HeaderAuth />}
+                    <HeaderAuth />
                   </div>
                 </div>
               </nav>

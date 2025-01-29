@@ -3,14 +3,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { AudioPlayer } from "@/components/audio-player";
-import { Upload, Loader2, Download } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Upload, Download } from "lucide-react";
 import { CostButton } from "@/components/cost-button";
 import { estimateCosts } from "@/utils/cost-calculator";
 import { creditsEvent } from "@/lib/credits-event";
@@ -42,7 +35,6 @@ export default function DocumentConverter() {
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [fullTextAudioUrl, setFullTextAudioUrl] = useState<string | null>(null);
   const [summaryAudioUrl, setSummaryAudioUrl] = useState<string | null>(null);
-  const [mode, setMode] = useState<"full" | "summary">("full");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileAnalysis, setFileAnalysis] = useState<FileAnalysis | null>(null);
