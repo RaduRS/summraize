@@ -31,7 +31,7 @@ async function addEntry(formData: FormData) {
     },
   ]);
 
-  revalidatePath("/notes");
+  revalidatePath("/");
 }
 
 export default async function Notes() {

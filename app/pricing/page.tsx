@@ -99,7 +99,7 @@ export default function PricingPage() {
   return (
     <div className="w-full relative">
       <BackgroundDecorations variant="gradient" />
-      <div className="max-w-7xl mx-auto p-4 py-20">
+      <div className="max-w-7xl mx-auto p-4 py-12 sm:py-20">
         <motion.div
           ref={headerRef}
           initial={{ opacity: 0, y: 20 }}
@@ -107,12 +107,12 @@ export default function PricingPage() {
             isHeaderInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
           }
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
+          className="text-center mb-8 sm:mb-12"
         >
-          <h1 className="text-4xl font-bold mb-4">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-4">
             Simple, Credit-Based Pricing
           </h1>
-          <p className="text-lg text-muted-foreground mb-8">
+          <p className="text-base sm:text-lg text-muted-foreground mb-8">
             Pay only for what you use. Credits never expire.
           </p>
         </motion.div>
@@ -125,16 +125,16 @@ export default function PricingPage() {
           }
           transition={{ duration: 0.5 }}
         >
-          <Card className="mx-auto border-primary mb-12 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:shadow-lg transition-all">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-center gap-2">
+          <Card className="mx-auto border-primary mb-8 sm:mb-12 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:shadow-lg transition-all">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex flex-col sm:flex-row items-center justify-center gap-2">
                 <span className="text-2xl">Start Free</span>
                 <span className="bg-primary text-primary-foreground text-sm px-3 py-1 rounded-full">
                   New Users
                 </span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="p-4 sm:p-6 space-y-6">
               <div className="text-center">
                 <p className="text-2xl font-bold text-primary">
                   200 Free Credits
@@ -147,7 +147,7 @@ export default function PricingPage() {
                 <p className="font-medium mb-3 text-center">
                   What you can do with your credits:
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                   <div className="p-4 rounded-lg bg-muted/50">
                     <div className="flex flex-col items-center text-center">
                       <Headphones className="h-8 w-8 text-primary mb-2" />
@@ -191,7 +191,11 @@ export default function PricingPage() {
                 </p>
               </div>
               <div className="flex justify-center">
-                <AuthButton href="/voice-assistant" size="lg" className="px-8">
+                <AuthButton
+                  href="/voice-assistant"
+                  size="lg"
+                  className="w-full sm:w-auto px-8"
+                >
                   Start Free Trial
                 </AuthButton>
               </div>
@@ -206,7 +210,7 @@ export default function PricingPage() {
             arePackagesInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
           }
           transition={{ duration: 0.5 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8 mb-8 sm:mb-16"
         >
           {packages.map((pkg, index) => (
             <motion.div
@@ -218,12 +222,16 @@ export default function PricingPage() {
               transition={{ duration: 0.5, delay: index * 0.1 }}
             >
               <Card className="flex flex-col h-full bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:shadow-lg transition-all">
-                <CardHeader>
+                <CardHeader className="p-4 sm:p-6">
                   <CardTitle>
                     <div className="flex flex-col gap-2">
-                      <span className="text-2xl font-bold">{pkg.name}</span>
+                      <span className="text-xl sm:text-2xl font-bold">
+                        {pkg.name}
+                      </span>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold">${pkg.price}</span>
+                        <span className="text-2xl sm:text-3xl font-bold">
+                          ${pkg.price}
+                        </span>
                         <span className="text-muted-foreground">USD</span>
                       </div>
                       <span className="text-sm text-muted-foreground">
@@ -232,7 +240,7 @@ export default function PricingPage() {
                     </div>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 flex flex-col">
+                <CardContent className="p-4 sm:p-6 flex-1 flex flex-col">
                   <p className="text-sm font-medium mb-4">
                     Maximum usage examples:
                   </p>
@@ -248,7 +256,7 @@ export default function PricingPage() {
                     <AuthButton
                       href="/voice-assistant"
                       size="lg"
-                      className="px-8"
+                      className="w-full"
                     >
                       Get {pkg.credits.toLocaleString()} Credits
                     </AuthButton>
@@ -266,10 +274,12 @@ export default function PricingPage() {
           transition={{ duration: 0.5 }}
         >
           <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle>Credit Usage Guide</CardTitle>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-xl sm:text-2xl">
+                Credit Usage Guide
+              </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6">
               <div className="space-y-6">
                 <div className="text-sm text-muted-foreground mb-6">
                   <p className="font-medium text-foreground mb-2">
@@ -281,36 +291,39 @@ export default function PricingPage() {
                     using credits for just one type of service.
                   </p>
                 </div>
-                <div>
-                  <h3 className="font-semibold mb-2">Voice Assistant</h3>
-                  <ul className="list-disc pl-6 space-y-1 text-sm">
-                    <li>
-                      Audio Transcription: 18 credits per minute (minimum 18
-                      credits)
-                    </li>
-                    <li>
-                      Text Summarization: 12 credits per 1,000 characters,
-                      minimum 1 credit (includes input and output processing)
-                    </li>
-                    <li>
-                      Text-to-Speech: 1 credit per 6,000 words (minimum 1
-                      credit, even for shorter texts)
-                    </li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-2">Document Converter</h3>
-                  <ul className="list-disc pl-6 space-y-1 text-sm">
-                    <li>
-                      Image Text Scanner (OCR - Optical Character Recognition):
-                      20 credits per image
-                    </li>
-                    <li>
-                      PDF/Text Processing: 5 credits base fee per document
-                      (additional costs for summarization and TTS if requested)
-                    </li>
-                    <li>Text-to-Speech: Same rates as Voice Assistant</li>
-                  </ul>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="font-semibold mb-2">Voice Assistant</h3>
+                    <ul className="list-disc pl-6 space-y-1 text-sm">
+                      <li>
+                        Audio Transcription: 18 credits per minute (minimum 18
+                        credits)
+                      </li>
+                      <li>
+                        Text Summarization: 12 credits per 1,000 characters,
+                        minimum 1 credit (includes input and output processing)
+                      </li>
+                      <li>
+                        Text-to-Speech: 1 credit per 6,000 words (minimum 1
+                        credit, even for shorter texts)
+                      </li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-2">Document Converter</h3>
+                    <ul className="list-disc pl-6 space-y-1 text-sm">
+                      <li>
+                        Image Text Scanner (OCR - Optical Character
+                        Recognition): 20 credits per image
+                      </li>
+                      <li>
+                        PDF/Text Processing: 5 credits base fee per document
+                        (additional costs for summarization and TTS if
+                        requested)
+                      </li>
+                      <li>Text-to-Speech: Same rates as Voice Assistant</li>
+                    </ul>
+                  </div>
                 </div>
                 <div className="text-sm">
                   <p className="mb-2 font-medium">Important Notes:</p>

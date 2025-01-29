@@ -90,18 +90,20 @@ const profiles = [
 
 export function UserProfiles() {
   return (
-    <div className="w-full py-20 relative">
+    <div className="w-full py-12 sm:py-20 relative">
       <BackgroundDecorations variant="dots" />
       <div className="relative w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">Who Uses summraize?</h2>
-          <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+        <div className="text-center mb-12 sm:mb-16">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+            Who Uses summraize?
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto px-4">
             Our solutions help professionals work smarter and students learn
             better
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-w-7xl mx-auto">
           {profiles.map((profile, index) => (
             <motion.div
               key={profile.title}
@@ -109,13 +111,15 @@ export function UserProfiles() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
             >
-              <Card className="p-8 h-full hover:shadow-lg transition-shadow bg-gray-50 dark:bg-gray-800">
+              <Card className="p-6 sm:p-8 h-full hover:shadow-lg transition-shadow bg-gray-50 dark:bg-gray-800">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="p-3 bg-white dark:bg-gray-900 rounded-lg">
                     <profile.icon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-semibold">{profile.title}</h3>
+                    <h3 className="text-xl sm:text-2xl font-semibold">
+                      {profile.title}
+                    </h3>
                   </div>
                 </div>
 
@@ -123,7 +127,7 @@ export function UserProfiles() {
                   {profile.description}
                 </p>
 
-                <div className="space-y-6 mb-6">
+                <div className="space-y-4 sm:space-y-6 mb-6">
                   <div>
                     <h4 className="font-semibold mb-3 text-red-600 dark:text-red-400 flex items-center gap-2">
                       <div className="p-1 bg-red-100 dark:bg-red-900 rounded">
@@ -135,10 +139,10 @@ export function UserProfiles() {
                       {profile.challenges.map((challenge) => (
                         <li
                           key={challenge}
-                          className="flex items-center gap-2 text-sm"
+                          className="flex items-start gap-2 text-sm sm:text-base"
                         >
-                          <div className="h-1.5 w-1.5 rounded-full bg-red-600 dark:bg-red-400" />
-                          <span className="text-gray-600 dark:text-gray-300">
+                          <div className="h-1.5 w-1.5 rounded-full bg-red-600 dark:bg-red-400 mt-2" />
+                          <span className="text-gray-600 dark:text-gray-300 flex-1">
                             {challenge}
                           </span>
                         </li>
@@ -157,10 +161,10 @@ export function UserProfiles() {
                       {profile.transformations.map((transformation) => (
                         <li
                           key={transformation}
-                          className="flex items-center gap-2 text-sm"
+                          className="flex items-start gap-2 text-sm sm:text-base"
                         >
-                          <div className="h-1.5 w-1.5 rounded-full bg-green-600 dark:bg-green-400" />
-                          <span className="text-gray-600 dark:text-gray-300">
+                          <div className="h-1.5 w-1.5 rounded-full bg-green-600 dark:bg-green-400 mt-2" />
+                          <span className="text-gray-600 dark:text-gray-300 flex-1">
                             {transformation}
                           </span>
                         </li>

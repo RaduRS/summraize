@@ -500,12 +500,14 @@ export default function VoiceAssistant() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-8 p-8">
+    <div className="flex flex-col items-center gap-6 sm:gap-8 p-4 sm:p-8">
       <div
         className={`w-full max-w-2xl space-y-4 ${!audioBlob ? "h-[calc(100vh-8rem)] flex flex-col justify-center" : ""}`}
       >
-        <h1 className="text-2xl font-bold text-center">Voice Assistant</h1>
-        <p className="text-muted-foreground text-center">
+        <h1 className="text-2xl sm:text-3xl font-bold text-center">
+          Voice Assistant
+        </h1>
+        <p className="text-muted-foreground text-center px-4">
           Record your voice and get an AI-generated summary
         </p>
 
@@ -519,14 +521,14 @@ export default function VoiceAssistant() {
           )}
         </div>
 
-        <div className="flex justify-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-center gap-4">
           {!isRecording ? (
             <>
               <Button
                 onClick={startRecording}
                 disabled={isProcessing}
                 size="lg"
-                className="w-32 px-2"
+                className="w-full sm:w-32 px-2"
               >
                 <Mic className="w-4 h-4 mr-2" strokeWidth={2} />
                 Record
@@ -536,7 +538,7 @@ export default function VoiceAssistant() {
                 disabled={isProcessing}
                 variant="outline"
                 size="lg"
-                className="w-32 px-2"
+                className="w-full sm:w-32 px-2"
               >
                 <Upload className="w-4 h-4 mr-2" strokeWidth={2} />
                 Upload
@@ -554,7 +556,7 @@ export default function VoiceAssistant() {
               onClick={stopRecording}
               variant="destructive"
               size="lg"
-              className="w-32"
+              className="w-full sm:w-32"
             >
               <Square className="mr-2 h-4 w-4" />
               Stop
@@ -565,48 +567,30 @@ export default function VoiceAssistant() {
         {audioBlob && (
           <div className="w-full max-w-2xl space-y-4">
             <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-sm text-muted-foreground">
-                  Audio Ready
-                  {recordingTime > 0
-                    ? ` (${Math.floor(finalDuration / 60)}:${(finalDuration % 60).toString().padStart(2, "0")})`
-                    : ""}
-                </h4>
-                <Button
-                  onClick={() => {
-                    if (audioBlob) {
-                      const url = URL.createObjectURL(audioBlob);
-                      downloadAudio(url, `recording-${Date.now()}.wav`);
-                      URL.revokeObjectURL(url);
-                    }
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
+              <div className="flex flex-col sm:flex-row items-start gap-4">
+                <div className="w-full sm:w-24 h-24 rounded-lg overflow-hidden border bg-muted flex items-center justify-center">
+                  <Mic className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <div className="flex-1 w-full">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm text-muted-foreground">
+                        Audio Recording
+                      </h4>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Duration: {Math.round(audioDuration)} seconds
+                    </div>
+                    <AudioPlayer
+                      src={result?.audioUrl ?? URL.createObjectURL(audioBlob)}
+                      onError={() => alert("Error loading audio")}
+                    />
+                  </div>
+                </div>
               </div>
-              <AudioPlayer
-                src={result?.audioUrl || URL.createObjectURL(audioBlob)}
-                onError={() => alert("Error playing audio")}
-                initialDuration={finalDuration}
-                onLoadedMetadata={(e) => {
-                  const audio = e.target as HTMLAudioElement;
-                  if (
-                    audio.duration &&
-                    !isNaN(audio.duration) &&
-                    isFinite(audio.duration)
-                  ) {
-                    setAudioDuration(audio.duration);
-                  } else {
-                    setAudioDuration(finalDuration);
-                  }
-                }}
-              />
             </div>
 
-            <div className="flex justify-between gap-4">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
               <CostButton
                 onClick={transcribe}
                 disabled={
@@ -621,7 +605,7 @@ export default function VoiceAssistant() {
                     ? undefined
                     : getRemainingCost("transcribe")
                 }
-                className="w-[180px]"
+                className="w-full sm:w-[180px]"
               >
                 Transcribe Audio
               </CostButton>
@@ -636,7 +620,7 @@ export default function VoiceAssistant() {
                 }
                 isLoading={!result?.summary && isSummaryLoading}
                 cost={result?.summary ? undefined : getRemainingCost("summary")}
-                className="w-[180px]"
+                className="w-full sm:w-[180px]"
               >
                 Generate Summary
               </CostButton>
@@ -786,7 +770,7 @@ export default function VoiceAssistant() {
                 }
                 isLoading={!ttsAudioUrl && isTtsLoading}
                 cost={ttsAudioUrl ? undefined : getRemainingCost("speech")}
-                className="w-[180px]"
+                className="w-full sm:w-[180px]"
               >
                 Generate Speech
               </CostButton>
@@ -809,7 +793,6 @@ export default function VoiceAssistant() {
                     <p key={i}>
                       {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
                         if (part.startsWith("*") && part.endsWith("*")) {
-                          // Remove asterisks and render as bold
                           return <strong key={j}>{part.slice(1, -1)}</strong>;
                         }
                         return part;
@@ -851,8 +834,8 @@ export default function VoiceAssistant() {
       <InsufficientCreditsModal
         isOpen={showInsufficientCreditsModal}
         onClose={() => setShowInsufficientCreditsModal(false)}
-        requiredCredits={insufficientCreditsData?.required || 0}
-        availableCredits={insufficientCreditsData?.available || 0}
+        requiredCredits={insufficientCreditsData?.required ?? 0}
+        availableCredits={insufficientCreditsData?.available ?? 0}
       />
     </div>
   );

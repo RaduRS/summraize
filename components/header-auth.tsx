@@ -1,42 +1,59 @@
 "use client";
 
-import { signOutAction } from "@/app/actions";
+import { Button } from "@/components/ui/button";
+import { useAuth, supabase } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
+import { LogOut } from "lucide-react";
 import Link from "next/link";
-import { Button } from "./ui/button";
-import { createClient } from "@/utils/supabase/client";
-import { useEffect, useState } from "react";
 
-export default function AuthButton() {
-  const [user, setUser] = useState<any>(null);
-  const supabase = createClient();
+interface HeaderAuthProps {
+  className?: string;
+  isMobile?: boolean;
+}
 
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
+export default function HeaderAuth({ className, isMobile }: HeaderAuthProps) {
+  const { isAuthenticated, isLoading } = useAuth();
 
-    getUser();
-  }, [supabase.auth]);
+  console.log("🎯 HeaderAuth render:", {
+    isAuthenticated,
+    isLoading,
+    isMobile,
+  });
 
-  return user ? (
-    <div className="flex items-center gap-4">
-      <form action={signOutAction}>
-        <Button type="submit" variant={"outline"}>
-          Sign out
+  if (isLoading) {
+    console.log("⏳ HeaderAuth loading...");
+    return null;
+  }
+
+  if (!isAuthenticated) {
+    console.log("🔒 HeaderAuth showing login buttons");
+    return (
+      <div
+        className={cn("flex gap-2", !isMobile && "hidden md:flex", className)}
+      >
+        <Button asChild size="sm" variant="outline">
+          <Link href="/sign-in">Sign in</Link>
         </Button>
-      </form>
-    </div>
-  ) : (
-    <div className="flex gap-2">
-      <Button asChild size="sm" variant={"outline"}>
-        <Link href="/sign-in">Sign in</Link>
-      </Button>
-      <Button asChild size="sm" variant={"default"}>
-        <Link href="/sign-up">Sign up</Link>
-      </Button>
-    </div>
+        <Button asChild size="sm">
+          <Link href="/sign-up">Sign up</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  console.log("🔓 HeaderAuth showing sign out button");
+  return (
+    <Button
+      variant="ghost"
+      onClick={() => supabase.auth.signOut()}
+      className={cn(
+        "w-full justify-start gap-2",
+        !isMobile && "hidden md:flex",
+        className
+      )}
+    >
+      <LogOut className="h-4 w-4" />
+      Sign Out
+    </Button>
   );
 }
