@@ -37,8 +37,12 @@ export function Footer() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground mt-4">
-                © {currentYear} Summr<span className="text-primary">ai</span>
-                ze. All rights reserved.
+                © {currentYear}{" "}
+                <span className="font-bold">
+                  summr
+                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                </span>
+                . All rights reserved.
               </p>
             </div>
           </div>
@@ -71,9 +75,13 @@ export function Footer() {
               <div className="flex flex-col items-center md:items-start space-y-3">
                 <ThemeSwitcher />
                 <p className="text-xs text-muted-foreground max-w-xs">
-                  Summr<span className="text-primary">ai</span>ze converts
-                  speech and documents to text, summarizes content, and brings
-                  it to life with AI voice. Pay as you go with our credit
+                  <span className="font-bold">
+                    summr
+                    <span className="text-blue-500 dark:text-blue-400">ai</span>
+                    ze
+                  </span>{" "}
+                  converts speech and documents to text, summarizes content, and
+                  brings it to life with AI voice. Pay as you go with our credit
                   system.
                 </p>
                 <p className="text-xs text-muted-foreground">

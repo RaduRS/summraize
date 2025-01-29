@@ -14,10 +14,14 @@ export default function TermsOfService() {
                 1. Acceptance of Terms
               </h2>
               <p>
-                By accessing and using Summraize, you agree to be bound by these
-                Terms of Service and all applicable laws and regulations. If you
-                do not agree with any of these terms, you are prohibited from
-                using the service.
+                By accessing and using{" "}
+                <span className="font-bold">
+                  summr
+                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                </span>
+                , you agree to be bound by these Terms of Service and all
+                applicable laws and regulations. If you do not agree with any of
+                these terms, you are prohibited from using the service.
               </p>
             </section>
 
@@ -25,7 +29,13 @@ export default function TermsOfService() {
               <h2 className="text-xl font-semibold mb-4">
                 2. Description of Service
               </h2>
-              <p>Summraize provides AI-powered services including:</p>
+              <p>
+                <span className="font-bold">
+                  summr
+                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                </span>{" "}
+                provides AI-powered services including:
+              </p>
               <ul className="list-disc pl-6 space-y-2">
                 <li>Audio transcription and analysis</li>
                 <li>Document processing and conversion</li>
@@ -128,9 +138,12 @@ export default function TermsOfService() {
                 8. Limitation of Liability
               </h2>
               <p>
-                Summraize is provided "as is" without warranties of any kind. We
-                are not liable for any damages arising from the use of our
-                service.
+                <span className="font-bold">
+                  summr
+                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                </span>{" "}
+                is provided "as is" without warranties of any kind. We are not
+                liable for any damages arising from the use of our service.
               </p>
             </section>
 
@@ -150,8 +163,12 @@ export default function TermsOfService() {
             <section>
               <h2 className="text-xl font-semibold mb-4">10. Contact</h2>
               <p>
-                For questions about these Terms of Service, please contact us at
-                support@summraize.com
+                For questions about these Terms of Service, please contact us at{" "}
+                <span className="font-bold">
+                  support@summr
+                  <span className="text-blue-500 dark:text-blue-400">ai</span>
+                  ze.com
+                </span>
               </p>
             </section>
           </div>

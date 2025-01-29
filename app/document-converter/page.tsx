@@ -9,6 +9,7 @@ import { estimateCosts } from "@/utils/cost-calculator";
 import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
 import { useToast } from "@/hooks/use-toast";
+import { downloadAudio } from "@/utils/audio-helpers";
 
 interface ProcessingResult {
   text: string;
@@ -301,7 +302,6 @@ export default function DocumentConverter() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: cleanTextForSpeech,
-          voice: "alloy",
         }),
       });
 
@@ -522,7 +522,14 @@ export default function DocumentConverter() {
                         Full Text Audio
                       </h4>
                       <Button
-                        onClick={() => window.open(fullTextAudioUrl)}
+                        onClick={() => {
+                          if (fullTextAudioUrl) {
+                            downloadAudio(
+                              fullTextAudioUrl,
+                              `full-text-${Date.now()}.mp3`
+                            );
+                          }
+                        }}
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 p-0"
@@ -562,7 +569,14 @@ export default function DocumentConverter() {
                         Summary Audio
                       </h4>
                       <Button
-                        onClick={() => window.open(summaryAudioUrl)}
+                        onClick={() => {
+                          if (summaryAudioUrl) {
+                            downloadAudio(
+                              summaryAudioUrl,
+                              `summary-${Date.now()}.mp3`
+                            );
+                          }
+                        }}
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 p-0"
