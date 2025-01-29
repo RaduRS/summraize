@@ -2,22 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Mic,
-  Square,
-  Loader2,
-  Play,
-  Pause,
-  Upload,
-  Download,
-} from "lucide-react";
+import { Mic, Square, Upload, Download } from "lucide-react";
 import { AudioVisualizer } from "@/components/audio-visualizer";
 import { AudioPlayer } from "@/components/audio-player";
 import { CostButton } from "@/components/cost-button";
-import {
-  estimateCosts,
-  calculateAudioOperationCosts,
-} from "@/utils/cost-calculator";
+import { calculateAudioOperationCosts } from "@/utils/cost-calculator";
 import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +15,7 @@ import { downloadAudio } from "@/utils/audio-helpers";
 interface ProcessingResult {
   transcription: string;
   audioUrl: string;
-  summary?: string; // Make summary optional
+  summary?: string;
 }
 
 export default function VoiceAssistant() {
