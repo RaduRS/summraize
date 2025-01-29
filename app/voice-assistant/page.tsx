@@ -11,6 +11,8 @@ import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
 import { useToast } from "@/hooks/use-toast";
 import { downloadAudio } from "@/utils/audio-helpers";
+import { useAuth } from "@/hooks/use-auth";
+import { useRouter } from "next/navigation";
 
 interface ProcessingResult {
   transcription: string;
@@ -44,8 +46,21 @@ export default function VoiceAssistant() {
     required: number;
     available: number;
   } | null>(null);
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
 
   const MAX_RECORDING_TIME = 60; // 1 minute max
+
+  useEffect(() => {
+    if (isAuthenticated === false) {
+      sessionStorage.setItem("redirectAfterAuth", "/voice-assistant");
+      router.push("/sign-up");
+    }
+  }, [isAuthenticated, router]);
+
+  if (isAuthenticated === false) {
+    return null;
+  }
 
   const startRecording = async () => {
     try {
@@ -486,7 +501,9 @@ export default function VoiceAssistant() {
 
   return (
     <div className="flex flex-col items-center gap-8 p-8">
-      <div className="w-full max-w-2xl space-y-4">
+      <div
+        className={`w-full max-w-2xl space-y-4 ${!audioBlob ? "h-[calc(100vh-8rem)] flex flex-col justify-center" : ""}`}
+      >
         <h1 className="text-2xl font-bold text-center">Voice Assistant</h1>
         <p className="text-muted-foreground text-center">
           Record your voice and get an AI-generated summary

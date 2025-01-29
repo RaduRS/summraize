@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { AudioPlayer } from "@/components/audio-player";
 import { Upload, Download } from "lucide-react";
 import { CostButton } from "@/components/cost-button";
-import { estimateCosts } from "@/utils/cost-calculator";
 import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
 import { useToast } from "@/hooks/use-toast";
 import { downloadAudio } from "@/utils/audio-helpers";
+import { useAuth } from "@/hooks/use-auth";
+import { useRouter } from "next/navigation";
 
 interface ProcessingResult {
   text: string;
@@ -46,6 +47,19 @@ export default function DocumentConverter() {
     required: number;
     available: number;
   } | null>(null);
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated === false) {
+      sessionStorage.setItem("redirectAfterAuth", "/document-converter");
+      router.push("/sign-up");
+    }
+  }, [isAuthenticated, router]);
+
+  if (isAuthenticated === false) {
+    return null;
+  }
 
   const analyzeFile = async (file: File) => {
     try {
@@ -375,7 +389,9 @@ export default function DocumentConverter() {
 
   return (
     <div className="flex flex-col items-center gap-8 p-8">
-      <div className="w-full max-w-2xl space-y-4">
+      <div
+        className={`w-full max-w-2xl space-y-4 ${!selectedFile ? "h-[calc(100vh-8rem)] flex flex-col justify-center" : ""}`}
+      >
         <h1 className="text-2xl font-bold text-center">Document Converter</h1>
         <p className="text-muted-foreground text-center">
           Convert your documents to speech
