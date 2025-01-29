@@ -1,7 +1,7 @@
 Requirements:
-Mobile Responsiveness
+Mobile Responsiveness both both logged in and logged out users
 
-Make sure all pages and components adapt well to different screen sizes.
+Make sure all pages and components adapt well to different screen sizes.(dekstop[small, medium, big], tablet[small, medium, big], mobiles[small, medium, big])
 Use flexbox and CSS grid appropriately.
 Implement ShadCN’s Sheet Component for mobile navigation if needed.
 Ensure images and text scale properly on small screens.
@@ -29,3 +29,4 @@ Ensure all pages maintain a consistent design.
 Optimize SEO and performance.
 
 my website will be : summraize.io
+note - voice assistant and document converter tab component on mobile might be tricky but you will make it work

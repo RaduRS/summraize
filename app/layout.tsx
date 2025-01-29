@@ -1,7 +1,8 @@
-import { ThemeProvider } from "next-themes";
-import { Footer } from "@/components/footer";
-import { Nav } from "@/components/nav";
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "next-themes";
+import { Providers } from "@/components/providers";
+import { Nav } from "@/components/nav";
+import { Footer } from "@/components/footer";
 import { cn } from "@/lib/utils";
 import { Geist } from "next/font/google";
 import "./globals.css";
@@ -13,9 +14,8 @@ const geistSans = Geist({
 });
 
 export const metadata = {
-  title: "summraize - AI-Powered Content Transformation",
-  description:
-    "Transform your content with AI-powered speech-to-text, document conversion, and summarization.",
+  title: "Summraize",
+  description: "Your AI-powered voice assistant and document converter.",
 };
 
 export default function RootLayout({
@@ -28,8 +28,7 @@ export default function RootLayout({
       <body
         className={cn(
           "min-h-screen bg-background antialiased",
-          geistSans.className,
-          "text-foreground font-normal"
+          geistSans.className
         )}
       >
         <ThemeProvider
@@ -38,12 +37,14 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="relative flex min-h-screen flex-col">
-            <Nav />
-            <main className="flex-1 mt-16">{children}</main>
-            <Footer />
-          </div>
-          <Toaster />
+          <Providers>
+            <div className="relative flex min-h-screen flex-col">
+              <Nav />
+              <main className="flex-1 mt-16">{children}</main>
+              <Footer />
+            </div>
+            <Toaster />
+          </Providers>
         </ThemeProvider>
       </body>
     </html>

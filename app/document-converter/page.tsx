@@ -388,12 +388,14 @@ export default function DocumentConverter() {
   };
 
   return (
-    <div className="flex flex-col items-center gap-8 p-8">
+    <div className="flex flex-col items-center gap-6 sm:gap-8 p-4 sm:p-8">
       <div
         className={`w-full max-w-2xl space-y-4 ${!selectedFile ? "h-[calc(100vh-8rem)] flex flex-col justify-center" : ""}`}
       >
-        <h1 className="text-2xl font-bold text-center">Document Converter</h1>
-        <p className="text-muted-foreground text-center">
+        <h1 className="text-2xl sm:text-3xl font-bold text-center">
+          Document Converter
+        </h1>
+        <p className="text-muted-foreground text-center px-4">
           Convert your documents to speech
         </p>
 
@@ -402,7 +404,7 @@ export default function DocumentConverter() {
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing}
             size="lg"
-            className="w-48 inline-flex items-center px-2"
+            className="w-full sm:w-48 inline-flex items-center px-2"
           >
             <Upload className="w-4 h-4 mr-2" strokeWidth={2} />
             Upload Document
@@ -419,9 +421,9 @@ export default function DocumentConverter() {
         {selectedFile && (
           <div className="w-full max-w-2xl space-y-4">
             <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-start gap-4">
+              <div className="flex flex-col sm:flex-row items-start gap-4">
                 {previewUrl && (
-                  <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border bg-muted">
+                  <div className="w-full sm:w-24 h-24 rounded-lg overflow-hidden border bg-muted">
                     <img
                       src={previewUrl}
                       alt="Document preview"
@@ -429,10 +431,10 @@ export default function DocumentConverter() {
                     />
                   </div>
                 )}
-                <div className="flex-1">
+                <div className="flex-1 w-full">
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-sm text-muted-foreground">
+                      <h4 className="font-medium text-sm text-muted-foreground break-all">
                         {selectedFile.name}
                       </h4>
                     </div>
@@ -450,7 +452,7 @@ export default function DocumentConverter() {
                           <>
                             Estimated Word Count:{" "}
                             {fileAnalysis.wordCount.toLocaleString()}
-                            <span className="text-xs ml-2 text-muted-foreground">
+                            <span className="block sm:inline text-xs sm:ml-2 text-muted-foreground">
                               (Range:{" "}
                               {fileAnalysis.estimateRange?.minWordCount.toLocaleString()}{" "}
                               -{" "}
@@ -466,7 +468,7 @@ export default function DocumentConverter() {
               </div>
             </div>
 
-            <div className="flex justify-between gap-4">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
               <CostButton
                 onClick={transcribe}
                 disabled={Boolean(
@@ -477,7 +479,7 @@ export default function DocumentConverter() {
                 )}
                 isLoading={isProcessing && !result?.text}
                 cost={result?.text ? undefined : getRemainingCost("transcribe")}
-                className="w-[180px]"
+                className="w-full sm:w-[180px]"
               >
                 Transcribe Document
               </CostButton>
@@ -494,7 +496,7 @@ export default function DocumentConverter() {
                   isTtsLoading && !fullTextAudioUrl && !isSummaryLoading
                 }
                 cost={fullTextAudioUrl ? undefined : getRemainingCost("full")}
-                className="w-[180px]"
+                className="w-full sm:w-[180px]"
               >
                 Generate Full Speech
               </CostButton>
@@ -509,7 +511,7 @@ export default function DocumentConverter() {
                 )}
                 isLoading={isSummaryLoading && !summaryAudioUrl}
                 cost={summaryAudioUrl ? undefined : getRemainingCost("summary")}
-                className="w-[180px]"
+                className="w-full sm:w-[180px]"
               >
                 Generate Summary Speech
               </CostButton>
@@ -523,7 +525,6 @@ export default function DocumentConverter() {
                     <p key={i}>
                       {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
                         if (part.startsWith("*") && part.endsWith("*")) {
-                          // Remove asterisks and render as bold
                           return <strong key={j}>{part.slice(1, -1)}</strong>;
                         }
                         return part;
@@ -570,7 +571,6 @@ export default function DocumentConverter() {
                     <p key={i}>
                       {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
                         if (part.startsWith("*") && part.endsWith("*")) {
-                          // Remove asterisks and render as bold
                           return <strong key={j}>{part.slice(1, -1)}</strong>;
                         }
                         return part;
@@ -614,8 +614,8 @@ export default function DocumentConverter() {
       <InsufficientCreditsModal
         isOpen={showInsufficientCreditsModal}
         onClose={() => setShowInsufficientCreditsModal(false)}
-        requiredCredits={insufficientCreditsData?.required || 0}
-        availableCredits={insufficientCreditsData?.available || 0}
+        requiredCredits={insufficientCreditsData?.required ?? 0}
+        availableCredits={insufficientCreditsData?.available ?? 0}
       />
     </div>
   );

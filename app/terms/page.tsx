@@ -2,18 +2,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function TermsOfService() {
   return (
-    <div className="max-w-4xl mx-auto p-4 py-8">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Terms of Service</CardTitle>
+    <div className="w-full max-w-4xl mx-auto p-4 py-8 sm:py-12">
+      <Card className="bg-card/50 backdrop-blur-sm">
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-2xl sm:text-3xl">
+            Terms of Service
+          </CardTitle>
         </CardHeader>
-        <CardContent className="prose dark:prose-invert">
-          <div className="space-y-6">
+        <CardContent className="prose dark:prose-invert p-4 sm:p-6">
+          <div className="space-y-6 sm:space-y-8">
             <section>
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
                 1. Acceptance of Terms
               </h2>
-              <p>
+              <p className="text-sm sm:text-base">
                 By accessing and using{" "}
                 <span className="font-bold">
                   summr
@@ -26,17 +28,17 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
                 2. Description of Service
               </h2>
-              <p>
+              <p className="text-sm sm:text-base">
                 <span className="font-bold">
                   summr
                   <span className="text-blue-500 dark:text-blue-400">ai</span>ze
                 </span>{" "}
                 provides AI-powered services including:
               </p>
-              <ul className="list-disc pl-6 space-y-2">
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
                 <li>Audio transcription and analysis</li>
                 <li>Document processing and conversion</li>
                 <li>Text-to-speech capabilities</li>
@@ -44,8 +46,10 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">3. User Accounts</h2>
-              <ul className="list-disc pl-6 space-y-2">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
+                3. User Accounts
+              </h2>
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
                 <li>
                   You must provide accurate and complete information when
                   creating an account
@@ -65,13 +69,13 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
                 4. Credits and Payments
               </h2>
-              <h3 className="text-lg font-semibold mb-2">
+              <h3 className="text-lg sm:text-xl font-semibold mb-2">
                 Credits and Payments
               </h3>
-              <ul className="list-disc pl-6 space-y-2">
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
                 <li>
                   Our service operates on a credit-based system. Credits must be
                   purchased in advance to use our services.
@@ -92,8 +96,10 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">5. User Content</h2>
-              <ul className="list-disc pl-6 space-y-2">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
+                5. User Content
+              </h2>
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
                 <li>You retain rights to content you upload</li>
                 <li>You must have necessary rights to upload content</li>
                 <li>
@@ -105,9 +111,11 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">6. Acceptable Use</h2>
-              <p>You agree not to:</p>
-              <ul className="list-disc pl-6 space-y-2">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
+                6. Acceptable Use
+              </h2>
+              <p className="text-sm sm:text-base">You agree not to:</p>
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
                 <li>Use the service for illegal purposes</li>
                 <li>Upload malicious content</li>
                 <li>Attempt to breach security measures</li>
@@ -117,10 +125,10 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
                 7. Service Availability
               </h2>
-              <ul className="list-disc pl-6 space-y-2">
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
                 <li>
                   We strive for high availability but do not guarantee
                   uninterrupted service
@@ -134,10 +142,10 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
                 8. Limitation of Liability
               </h2>
-              <p>
+              <p className="text-sm sm:text-base">
                 <span className="font-bold">
                   summr
                   <span className="text-blue-500 dark:text-blue-400">ai</span>ze
@@ -148,21 +156,23 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
                 9. Changes to Terms
               </h2>
-              <p>
+              <p className="text-sm sm:text-base">
                 We reserve the right to modify these terms at any time. Users
                 will be notified of significant changes.
               </p>
-              <p className="mt-4">
+              <p className="mt-4 text-sm sm:text-base">
                 Last Updated: {new Date().toLocaleDateString()}
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">10. Contact</h2>
-              <p>
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4">
+                10. Contact
+              </h2>
+              <p className="text-sm sm:text-base">
                 For questions about these Terms of Service, please contact us at{" "}
                 <span className="font-bold">
                   support@summr
