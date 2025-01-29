@@ -1,63 +1,48 @@
-import HeaderAuth from "@/components/header-auth";
-import { Footer } from "@/components/footer";
-import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { NavigationTabs } from "@/components/navigation-tabs";
-import "./globals.css";
-import { CreditsDisplay } from "@/components/credits-display";
+import { Footer } from "@/components/footer";
+import { Nav } from "@/components/nav";
 import { Toaster } from "@/components/ui/toaster";
-import { Logo } from "@/components/logo";
-
-const defaultUrl = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
-
-export const metadata = {
-  metadataBase: new URL(defaultUrl),
-  title: "Next.js and Supabase Starter Kit",
-  description: "The fastest way to build apps with Next.js and Supabase",
-};
+import { cn } from "@/lib/utils";
+import { Geist } from "next/font/google";
+import "./globals.css";
 
 const geistSans = Geist({
-  display: "swap",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-geist",
 });
+
+export const metadata = {
+  title: "summraize - AI-Powered Content Transformation",
+  description:
+    "Transform your content with AI-powered speech-to-text, document conversion, and summarization.",
+};
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en" className={geistSans.className} suppressHydrationWarning>
-      <body className="bg-background text-foreground">
+    <html lang="en" suppressHydrationWarning className={geistSans.variable}>
+      <body
+        className={cn(
+          "min-h-screen bg-background antialiased",
+          geistSans.className,
+          "text-foreground font-normal"
+        )}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          <main className="min-h-screen flex flex-col items-center">
-            <div className="flex-1 w-full flex flex-col gap-20 items-center">
-              <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-                <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
-                  <div className="flex gap-5 items-center">
-                    <Logo />
-                    <NavigationTabs />
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <CreditsDisplay />
-                    <HeaderAuth />
-                  </div>
-                </div>
-              </nav>
-              <div className="flex flex-col gap-20 max-w-5xl p-5 flex-1">
-                {children}
-              </div>
-
-              <Footer />
-            </div>
-          </main>
+          <div className="relative flex min-h-screen flex-col">
+            <Nav />
+            <main className="flex-1 mt-16">{children}</main>
+            <Footer />
+          </div>
           <Toaster />
         </ThemeProvider>
       </body>

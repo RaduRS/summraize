@@ -1,11 +1,17 @@
 "use client";
 
+import { useAuth } from "@/hooks/use-auth";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePathname, useRouter } from "next/navigation";
 
 export function NavigationTabs() {
   const router = useRouter();
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <Tabs

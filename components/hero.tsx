@@ -1,44 +1,109 @@
-import NextLogo from "./next-logo";
-import SupabaseLogo from "./supabase-logo";
+"use client";
 
-export default function Header() {
+import { motion, useInView } from "framer-motion";
+import { Button } from "./ui/button";
+import { AuthButton } from "./auth-button";
+import Link from "next/link";
+import { ArrowRight, FileText, Mic, Speaker } from "lucide-react";
+import { useRef } from "react";
+
+export default function Hero() {
+  const heroRef = useRef(null);
+  const featuresRef = useRef(null);
+  const isHeroInView = useInView(heroRef, { once: true, amount: 0.2 });
+  const areFeaturesInView = useInView(featuresRef, { once: true, amount: 0.2 });
+
   return (
-    <div className="flex flex-col gap-16 items-center">
-      <div className="flex gap-8 justify-center items-center">
-        <a
-          href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <SupabaseLogo />
-        </a>
-        <span className="border-l rotate-45 h-6" />
-        <a href="https://nextjs.org/" target="_blank" rel="noreferrer">
-          <NextLogo />
-        </a>
+    <section className="w-full relative">
+      {/* Background gradient */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-100 via-white to-blue-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 opacity-50" />
       </div>
-      <h1 className="sr-only">Supabase and Next.js Starter Template</h1>
-      <p className="text-3xl lg:text-4xl !leading-tight mx-auto max-w-xl text-center">
-        The fastest way to build apps with{" "}
-        <a
-          href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-          target="_blank"
-          className="font-bold hover:underline"
-          rel="noreferrer"
-        >
-          Supabase
-        </a>{" "}
-        and{" "}
-        <a
-          href="https://nextjs.org/"
-          target="_blank"
-          className="font-bold hover:underline"
-          rel="noreferrer"
-        >
-          Next.js
-        </a>
-      </p>
-      <div className="w-full p-[1px] bg-gradient-to-r from-transparent via-foreground/10 to-transparent my-8" />
-    </div>
+
+      <div className="w-full max-w-[2000px] mx-auto">
+        <div className="py-20 sm:py-24 px-4 sm:px-6 lg:px-8">
+          <motion.div
+            ref={heroRef}
+            initial={{ opacity: 0, y: 20 }}
+            animate={
+              isHeroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
+            }
+            transition={{ duration: 0.5 }}
+            className="text-center max-w-4xl mx-auto"
+          >
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-6xl flex flex-wrap justify-center items-center gap-x-3">
+              <span>Transform Your Content with</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 whitespace-nowrap">
+                AI Power
+              </span>
+            </h1>
+            <p className="mt-6 text-lg leading-8 text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              Instantly convert speech to text, summarize documents, and create
+              natural AI voices. From business professionals to educators, we've
+              got you covered.
+            </p>
+            <div className="mt-10 flex items-center justify-center gap-x-6">
+              <AuthButton href="/voice-assistant" size="lg" className="group">
+                Get Started Free
+                <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              </AuthButton>
+              <Link href="/pricing">
+                <Button variant="outline" size="lg">
+                  View Pricing
+                </Button>
+              </Link>
+            </div>
+          </motion.div>
+
+          {/* Feature highlights */}
+          <div
+            ref={featuresRef}
+            className="mt-20 grid grid-cols-1 gap-8 sm:grid-cols-3 max-w-7xl mx-auto"
+          >
+            {[
+              {
+                icon: Mic,
+                title: "Speech to Text",
+                description:
+                  "Convert any audio to accurate text with professional-grade precision",
+              },
+              {
+                icon: FileText,
+                title: "Document Summary",
+                description:
+                  "Get concise summaries of reports, papers, and documents",
+              },
+              {
+                icon: Speaker,
+                title: "AI Voice Synthesis",
+                description:
+                  "Transform text into natural-sounding speech for any content",
+              },
+            ].map((feature, index) => (
+              <motion.div
+                key={feature.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={
+                  areFeaturesInView
+                    ? { opacity: 1, y: 0 }
+                    : { opacity: 0, y: 20 }
+                }
+                transition={{
+                  duration: 0.5,
+                  delay: areFeaturesInView ? index * 0.1 : 0,
+                }}
+                className="flex flex-col items-center p-6 bg-white/50 dark:bg-gray-800/50 rounded-2xl shadow-sm hover:shadow-md transition-shadow"
+              >
+                <feature.icon className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+                <h3 className="mt-4 text-lg font-semibold">{feature.title}</h3>
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
+                  {feature.description}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
