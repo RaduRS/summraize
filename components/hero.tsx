@@ -21,7 +21,7 @@ export default function Hero() {
       </div>
 
       <div className="w-full max-w-[2000px] mx-auto">
-        <div className="py-20 sm:py-24 px-4 sm:px-6 lg:px-8">
+        <div className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
           <motion.div
             ref={heroRef}
             initial={{ opacity: 0, y: 20 }}
@@ -31,24 +31,34 @@ export default function Hero() {
             transition={{ duration: 0.5 }}
             className="text-center max-w-4xl mx-auto"
           >
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-6xl flex flex-wrap justify-center items-center gap-x-3">
-              <span>Transform Your Content with</span>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 whitespace-nowrap">
+            <h1 className="text-[2rem] xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 dark:text-white">
+              <span className="md:block inline">
+                Transform Your Content with{" "}
+              </span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
                 AI Power
               </span>
             </h1>
-            <p className="mt-6 text-lg leading-8 text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            <p className="mt-6 text-sm xs:text-base sm:text-lg leading-7 sm:leading-8 text-gray-600 dark:text-gray-300 max-w-2xl mx-auto px-4">
               Instantly convert speech to text, summarize documents, and create
               natural AI voices. From business professionals to educators, we've
               got you covered.
             </p>
-            <div className="mt-10 flex items-center justify-center gap-x-6">
-              <AuthButton href="/voice-assistant" size="lg" className="group">
+            <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-x-6">
+              <AuthButton
+                href="/voice-assistant"
+                size="lg"
+                className="w-full sm:w-auto group"
+              >
                 Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </AuthButton>
-              <Link href="/pricing">
-                <Button variant="outline" size="lg">
+              <Link href="/pricing" className="w-full sm:w-auto">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto"
+                >
                   View Pricing
                 </Button>
               </Link>
@@ -58,7 +68,7 @@ export default function Hero() {
           {/* Feature highlights */}
           <div
             ref={featuresRef}
-            className="mt-20 grid grid-cols-1 gap-8 sm:grid-cols-3 max-w-7xl mx-auto"
+            className="mt-16 sm:mt-20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 max-w-7xl mx-auto px-4"
           >
             {[
               {
@@ -95,7 +105,9 @@ export default function Hero() {
                 className="flex flex-col items-center p-6 bg-white/50 dark:bg-gray-800/50 rounded-2xl shadow-sm hover:shadow-md transition-shadow"
               >
                 <feature.icon className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-                <h3 className="mt-4 text-lg font-semibold">{feature.title}</h3>
+                <h3 className="mt-4 text-lg font-semibold text-center">
+                  {feature.title}
+                </h3>
                 <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
                   {feature.description}
                 </p>

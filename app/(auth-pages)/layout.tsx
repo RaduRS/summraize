@@ -1,9 +1,14 @@
-export default async function Layout({
+import { Logo } from "@/components/logo";
+import Link from "next/link";
+
+export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="max-w-7xl flex flex-col gap-12 items-start">{children}</div>
+    <div className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
+      {children}
+    </div>
   );
 }
