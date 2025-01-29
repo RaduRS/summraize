@@ -20,7 +20,7 @@ export function MobileNav() {
   if (!isAuthenticated) {
     return (
       <div className="md:hidden">
-        <HeaderAuth />
+        <HeaderAuth isMobile />
       </div>
     );
   }
@@ -38,7 +38,7 @@ export function MobileNav() {
         <div className="px-2 py-2">
           <CreditsDisplay />
         </div>
-        <DropdownMenuItem className="focus:bg-muted/50">
+        <DropdownMenuItem asChild className="focus:bg-muted/50">
           <HeaderAuth isMobile className="w-full" />
         </DropdownMenuItem>
       </DropdownMenuContent>

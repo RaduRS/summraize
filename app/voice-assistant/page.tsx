@@ -11,8 +11,8 @@ import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
 import { useToast } from "@/hooks/use-toast";
 import { downloadAudio } from "@/utils/audio-helpers";
-import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 
 interface ProcessingResult {
   transcription: string;
@@ -254,6 +254,7 @@ export default function VoiceAssistant() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
+        credentials: "include",
       });
 
       const data = await response.json();
@@ -266,6 +267,10 @@ export default function VoiceAssistant() {
         return;
       }
 
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to check credits");
+      }
+
       setIsProcessing(true);
       const formData = new FormData();
       formData.append("audio", audioBlob, "audio.webm");
@@ -274,6 +279,7 @@ export default function VoiceAssistant() {
       const response2 = await fetch("/api/process-audio", {
         method: "POST",
         body: formData,
+        credentials: "include",
       });
 
       const data2 = await response2.json();
@@ -284,6 +290,11 @@ export default function VoiceAssistant() {
             available: data2.available,
           });
           setShowInsufficientCreditsModal(true);
+          return;
+        }
+        if (response2.status === 401) {
+          // Handle unauthorized - redirect to sign in
+          router.push("/sign-in");
           return;
         }
         throw new Error(data2.error || "Failed to process audio");
@@ -325,6 +336,7 @@ export default function VoiceAssistant() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
+        credentials: "include",
       });
 
       const data = await response.json();
@@ -335,6 +347,10 @@ export default function VoiceAssistant() {
         });
         setShowInsufficientCreditsModal(true);
         return;
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to check credits");
       }
 
       setIsSummaryLoading(true);
@@ -349,6 +365,7 @@ export default function VoiceAssistant() {
         const response = await fetch("/api/process-audio", {
           method: "POST",
           body: formData,
+          credentials: "include",
         });
         const data = await response.json();
         if (!response.ok) {
@@ -358,6 +375,11 @@ export default function VoiceAssistant() {
               available: data.available,
             });
             setShowInsufficientCreditsModal(true);
+            return;
+          }
+          if (response.status === 401) {
+            // Handle unauthorized - redirect to sign in
+            router.push("/sign-in");
             return;
           }
           throw new Error(data.error || "Failed to process audio");
@@ -376,6 +398,7 @@ export default function VoiceAssistant() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: transcription }),
+        credentials: "include",
       });
 
       const summaryData = await summaryResponse.json();
@@ -388,7 +411,12 @@ export default function VoiceAssistant() {
           setShowInsufficientCreditsModal(true);
           return;
         }
-        throw new Error(summaryData.details || "Failed to generate summary");
+        if (summaryResponse.status === 401) {
+          // Handle unauthorized - redirect to sign in
+          router.push("/sign-in");
+          return;
+        }
+        throw new Error(summaryData.error || "Failed to generate summary");
       }
 
       setResult((prev) =>
@@ -567,27 +595,45 @@ export default function VoiceAssistant() {
         {audioBlob && (
           <div className="w-full max-w-2xl space-y-4">
             <div className="rounded-lg border bg-card p-4">
-              <div className="flex flex-col sm:flex-row items-start gap-4">
-                <div className="w-full sm:w-24 h-24 rounded-lg overflow-hidden border bg-muted flex items-center justify-center">
-                  <Mic className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <div className="flex-1 w-full">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-sm text-muted-foreground">
-                        Audio Recording
-                      </h4>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Duration: {Math.round(audioDuration)} seconds
-                    </div>
-                    <AudioPlayer
-                      src={result?.audioUrl ?? URL.createObjectURL(audioBlob)}
-                      onError={() => alert("Error loading audio")}
-                    />
-                  </div>
-                </div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-medium text-sm text-muted-foreground">
+                  Audio Ready
+                  {recordingTime > 0
+                    ? ` (${Math.floor(finalDuration / 60)}:${(finalDuration % 60).toString().padStart(2, "0")})`
+                    : ""}
+                </h4>
+                <Button
+                  onClick={() => {
+                    if (audioBlob) {
+                      const url = URL.createObjectURL(audioBlob);
+                      downloadAudio(url, `recording-${Date.now()}.wav`);
+                      URL.revokeObjectURL(url);
+                    }
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
               </div>
+              <AudioPlayer
+                src={result?.audioUrl || URL.createObjectURL(audioBlob)}
+                onError={() => alert("Error playing audio")}
+                initialDuration={finalDuration}
+                onLoadedMetadata={(e) => {
+                  const audio = e.target as HTMLAudioElement;
+                  if (
+                    audio.duration &&
+                    !isNaN(audio.duration) &&
+                    isFinite(audio.duration)
+                  ) {
+                    setAudioDuration(audio.duration);
+                  } else {
+                    setAudioDuration(finalDuration);
+                  }
+                }}
+              />
             </div>
 
             <div className="flex flex-col sm:flex-row justify-between gap-4">

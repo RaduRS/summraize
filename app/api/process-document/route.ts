@@ -132,13 +132,22 @@ export async function POST(
     }
 
     // Auth check
-    const supabase = createClient(request);
+    const supabase = await createClient(request);
+
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
-    if (authError || !user) {
+    if (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json(
+        { error: "Authentication error" },
+        { status: 401 }
+      );
+    }
+
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -238,11 +247,19 @@ export async function POST(
     );
 
     // Check if user has enough credits
-    const { data: credits } = await supabase
+    const { data: credits, error: creditsError } = await supabase
       .from("user_credits")
       .select("credits")
       .eq("user_id", user.id)
       .single();
+
+    if (creditsError) {
+      console.error("Credits error:", creditsError);
+      return NextResponse.json(
+        { error: "Failed to check credits" },
+        { status: 500 }
+      );
+    }
 
     if (!credits) {
       return NextResponse.json(
@@ -271,6 +288,7 @@ export async function POST(
       .single();
 
     if (updateError) {
+      console.error("Credits update error:", updateError);
       throw new Error("Failed to update credits");
     }
 
@@ -283,9 +301,11 @@ export async function POST(
       creditsDeducted,
     });
   } catch (error: any) {
-    console.error("Error processing document:", error);
+    console.error("Document processing error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to process request" },
+      {
+        error: error.message || "Failed to process document",
+      },
       { status: 500 }
     );
   }

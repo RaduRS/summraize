@@ -94,8 +94,21 @@ export async function middleware(request: NextRequest) {
     (request.nextUrl.pathname.startsWith("/sign-in") ||
       request.nextUrl.pathname.startsWith("/sign-up"))
   ) {
-    console.log("🔄 Redirecting authenticated user from auth page to home");
-    return NextResponse.redirect(new URL("/", request.url));
+    console.log(
+      "🔄 Redirecting authenticated user from auth page to voice-assistant"
+    );
+    return NextResponse.redirect(new URL("/voice-assistant", request.url));
+  }
+
+  // If trying to access protected pages while not authenticated
+  if (
+    !session &&
+    (request.nextUrl.pathname.startsWith("/voice-assistant") ||
+      request.nextUrl.pathname.startsWith("/document-converter") ||
+      request.nextUrl.pathname.startsWith("/protected"))
+  ) {
+    console.log("🔄 Redirecting unauthenticated user to sign-in");
+    return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
   return response;

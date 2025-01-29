@@ -12,13 +12,22 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     // Add auth check
-    const supabase = createClient(request);
+    const supabase = await createClient(request);
+
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
-    if (authError || !user) {
+    if (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json(
+        { error: "Authentication error" },
+        { status: 401 }
+      );
+    }
+
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -110,24 +119,48 @@ export async function POST(request: Request) {
 
       previewUrl = `data:image/jpeg;base64,${optimizedBuffer.toString("base64")}`;
     } else if (file.type.startsWith("image/")) {
-      const buffer = await file.arrayBuffer();
-      const imageBuffer = Buffer.from(buffer);
+      try {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const resizedBuffer = await sharp(buffer)
+          .resize(200, 200, {
+            fit: "inside",
+            withoutEnlargement: true,
+          })
+          .toBuffer();
 
-      const optimizedBuffer = await sharp(imageBuffer)
-        .resize(300, 400, {
-          fit: "fill",
-        })
-        .jpeg({ quality: 80 })
-        .toBuffer();
-
-      previewUrl = `data:image/jpeg;base64,${optimizedBuffer.toString("base64")}`;
+        previewUrl = `data:${file.type};base64,${resizedBuffer.toString(
+          "base64"
+        )}`;
+      } catch (error) {
+        console.error("Image processing error:", error);
+        throw new Error("Failed to generate image preview");
+      }
+    } else {
+      // For other file types, return a generic file icon
+      previewUrl = `data:image/svg+xml;base64,${Buffer.from(
+        `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" width="48" height="48">
+          <path 
+            d="M0 64C0 28.7 28.7 0 64 0h220.1c12.7 0 24.9 5.1 33.9 14.1l67.9 67.9c9 9 14.1 21.2 14.1 33.9V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64z"
+            fill="#6B7280"
+          />
+          <path 
+            d="M320 464c8.8 0 16-7.2 16-16V160H256c-17.7 0-32-14.3-32-32V48H64c-8.8 0-16 7.2-16 16v384c0 8.8 7.2 16 16 16h256z"
+            fill="#9CA3AF"
+          />
+        </svg>
+      `
+      ).toString("base64")}`;
     }
 
     return NextResponse.json({ previewUrl });
   } catch (error) {
-    console.error("Error generating preview:", error);
+    console.error("Preview generation error:", error);
     return NextResponse.json(
-      { error: "Failed to generate preview" },
+      {
+        error: "Failed to generate preview",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

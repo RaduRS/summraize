@@ -4,23 +4,11 @@ import { encodedRedirect } from "@/utils/utils";
 import { createClient } from "@/utils/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { NextResponse } from "next/server";
-import { createServerActionClient } from "@/utils/supabase/server";
-
-async function getRequest() {
-  const headersList = await headers();
-  // Convert headers to a plain object for logging
-  const headersObj = Object.fromEntries(headersList.entries());
-  console.log("📡 Headers received in getRequest():", headersObj);
-  const origin = headersList.get("origin") || "http://localhost:3000";
-  console.log("🌐 Origin:", origin);
-  return new Request(origin, { headers: headersList });
-}
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();
-  const supabase = createClient(await getRequest());
+  const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
   if (!email || !password) {
@@ -51,34 +39,30 @@ export const signUpAction = async (formData: FormData) => {
   }
 };
 
-export async function signInAction(formData: FormData) {
-  const supabase = await createServerActionClient();
+export const signInAction = async (formData: FormData) => {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+  const supabase = await createClient();
 
-  const data = {
-    email: formData.get("email") as string,
-    password: formData.get("password") as string,
-  };
+  console.log("🔐 Attempting sign in for:", email);
 
-  const { error, data: authData } =
-    await supabase.auth.signInWithPassword(data);
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
   if (error) {
-    console.error("Sign in error:", error);
-    return { error: error.message };
+    console.error("❌ Sign in error:", error);
+    return encodedRedirect("error", "/sign-in", error.message);
   }
 
-  if (!authData?.session) {
-    console.error("No session after sign in");
-    return { error: "Authentication failed" };
-  }
-
-  console.log("Sign in successful, session established");
-  return redirect("/");
-}
+  console.log("✅ Sign in successful");
+  return redirect("/voice-assistant");
+};
 
 export const forgotPasswordAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
-  const supabase = createClient(await getRequest());
+  const supabase = await createClient();
   const origin = (await headers()).get("origin");
   const callbackUrl = formData.get("callbackUrl")?.toString();
 
@@ -111,7 +95,7 @@ export const forgotPasswordAction = async (formData: FormData) => {
 };
 
 export const resetPasswordAction = async (formData: FormData) => {
-  const supabase = createClient(await getRequest());
+  const supabase = await createClient();
 
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
@@ -148,20 +132,7 @@ export const resetPasswordAction = async (formData: FormData) => {
 };
 
 export const signOutAction = async () => {
-  console.log("🚪 Starting sign out process...");
-  try {
-    const supabase = createClient(await getRequest());
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      console.error("❌ Sign out error:", error);
-      return encodedRedirect("error", "/", "Failed to sign out properly");
-    }
-
-    console.log("✅ Sign out successful");
-    return redirect("/sign-in");
-  } catch (e) {
-    console.error("🔥 Unexpected error during sign out:", e);
-    return redirect("/sign-in");
-  }
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  return redirect("/");
 };

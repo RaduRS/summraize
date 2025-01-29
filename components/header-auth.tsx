@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { createClient } from "@/utils/supabase/client";
 import { cn } from "@/lib/utils";
 import { LogOut } from "lucide-react";
 import Link from "next/link";
+import { CreditsDisplay } from "@/components/credits-display";
 import { useRouter } from "next/navigation";
 
 interface HeaderAuthProps {
@@ -15,8 +15,7 @@ interface HeaderAuthProps {
 
 export default function HeaderAuth({ className, isMobile }: HeaderAuthProps) {
   console.log("🎯 HeaderAuth component rendering");
-  const { isAuthenticated, isLoading } = useAuth();
-  const supabase = createClient();
+  const { isAuthenticated, isLoading, signOut } = useAuth();
   const router = useRouter();
 
   console.log("📊 HeaderAuth state:", {
@@ -30,6 +29,16 @@ export default function HeaderAuth({ className, isMobile }: HeaderAuthProps) {
     console.log("⏳ HeaderAuth loading state");
     return null;
   }
+
+  const handleSignOut = async () => {
+    console.log("🚪 HeaderAuth: Starting sign out");
+    try {
+      await signOut();
+      router.push("/");
+    } catch (e) {
+      console.error("💥 HeaderAuth unexpected sign out error:", e);
+    }
+  };
 
   if (!isAuthenticated) {
     console.log("🔒 HeaderAuth showing login buttons");
@@ -47,34 +56,20 @@ export default function HeaderAuth({ className, isMobile }: HeaderAuthProps) {
     );
   }
 
-  const handleSignOut = async () => {
-    console.log("🚪 HeaderAuth: Starting sign out");
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("❌ HeaderAuth sign out error:", error);
-      } else {
-        console.log("✅ HeaderAuth sign out successful");
-        router.refresh();
-      }
-    } catch (e) {
-      console.error("💥 HeaderAuth unexpected sign out error:", e);
-    }
-  };
-
   console.log("🔓 HeaderAuth showing sign out button");
   return (
-    <Button
-      variant="ghost"
-      onClick={handleSignOut}
+    <div
       className={cn(
-        "w-full justify-start gap-2",
+        "flex items-center gap-4",
         !isMobile && "hidden md:flex",
         className
       )}
     >
-      <LogOut className="h-4 w-4" />
-      Sign Out
-    </Button>
+      <CreditsDisplay />
+      <Button variant="ghost" onClick={handleSignOut} className="gap-2">
+        <LogOut className="h-4 w-4" />
+        Sign Out
+      </Button>
+    </div>
   );
 }

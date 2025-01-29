@@ -1,65 +1,61 @@
-import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient(request);
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const { fileSize, fileType } = await request.json();
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
-
-    // Get user's current credits
+    // Get the current user
+    const supabase = await createClient(request);
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
+
+    if (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json(
+        { error: "Authentication error" },
+        { status: 401 }
+      );
+    }
+
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: credits } = await supabase
+    // Check user credits
+    const { data: credits, error: creditsError } = await supabase
       .from("user_credits")
       .select("credits")
       .eq("user_id", user.id)
       .single();
 
-    if (!credits) {
-      return NextResponse.json({ error: "No credits found" }, { status: 404 });
+    if (creditsError) {
+      console.error("Credits error:", creditsError);
+      return NextResponse.json(
+        { error: "Failed to check credits" },
+        { status: 500 }
+      );
     }
 
-    // Read file content for estimation
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    // Estimate costs based on file type
+    // Estimate cost based on file size and type
+    const fileSizeInMB = fileSize / (1024 * 1024);
     let estimatedCost = 0;
 
-    if (file.type === "text/plain") {
-      // For text files, read content directly
-      const text = buffer.toString("utf-8");
-      estimatedCost = Math.ceil(
-        estimateCosts({
-          textLength: text.length,
-        }).total
-      );
-    } else if (file.type === "application/pdf") {
-      // For PDFs, estimate based on file size with a multiplier
-      // This is a rough estimate - you might want to use a PDF parser
-      estimatedCost = Math.ceil(
-        estimateCosts({
-          textLength: Math.ceil(buffer.length * 0.1), // Rough estimate: 10% of file size is text
-        }).total
-      );
-    } else if (file.type.startsWith("image/")) {
-      // For images, use a base cost as OCR processing is more intensive
-      estimatedCost = Math.ceil(
-        estimateCosts({
-          textLength: 1000, // Base estimate for image OCR
-        }).total
-      );
+    if (fileType === "application/pdf" || fileType === "text/plain") {
+      // For PDFs and text files, use flat rate
+      estimatedCost = 5; // Base cost for PDF/text processing
+    } else if (fileType.startsWith("image/")) {
+      // For images, higher cost due to OCR
+      estimatedCost = 10; // Base cost for image OCR
+    } else if (fileType.startsWith("audio/")) {
+      // For audio, estimate based on duration (rough estimate: 1MB ≈ 1 minute)
+      estimatedCost = Math.ceil(fileSizeInMB) * 2; // 2 credits per minute
+    } else {
+      // Default case
+      estimatedCost = Math.ceil(fileSizeInMB * 2);
     }
 
     // Add buffer for potential summary/speech generation

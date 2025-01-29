@@ -9,8 +9,8 @@ import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
 import { useToast } from "@/hooks/use-toast";
 import { downloadAudio } from "@/utils/audio-helpers";
-import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 
 interface ProcessingResult {
   text: string;

@@ -18,13 +18,21 @@ export async function POST(request: Request) {
     });
 
     // Get the current user
-    const supabase = createClient(request);
+    const supabase = await createClient(request);
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
-    if (authError || !user) {
+    if (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json(
+        { error: "Authentication error" },
+        { status: 401 }
+      );
+    }
+
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

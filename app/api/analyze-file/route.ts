@@ -5,7 +5,7 @@ import pdf from "pdf-parse-fork";
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient(request);
+    const supabase = await createClient(request);
 
     // Add auth check
     const {
@@ -13,7 +13,15 @@ export async function POST(request: Request) {
       error: authError,
     } = await supabase.auth.getUser();
 
-    if (authError || !user) {
+    if (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json(
+        { error: "Authentication error" },
+        { status: 401 }
+      );
+    }
+
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -50,41 +58,17 @@ export async function POST(request: Request) {
         isEstimate = true;
       }
     } else {
+      // For other file types, estimate based on file size
       const fileSizeInMB = file.size / (1024 * 1024);
-
-      if (file.type.startsWith("image/")) {
-        if (file.type === "image/png") {
-          // Increase PNG multiplier as they're uncompressed
-          wordCount = Math.ceil(fileSizeInMB * 150);
-        } else if (file.type === "image/jpeg") {
-          // Increase JPEG multiplier as they're compressed
-          wordCount = Math.ceil(fileSizeInMB * 300);
-        } else {
-          wordCount = Math.ceil(fileSizeInMB * 200);
-        }
-      } else {
-        wordCount = Math.ceil(fileSizeInMB * 400);
-      }
-
-      // Adjust size-based modifications
-      if (fileSizeInMB < 0.1) {
-        // Increase multiplier for very small files
-        wordCount = Math.ceil(wordCount * 0.8);
-      } else if (fileSizeInMB > 5) {
-        // Less aggressive reduction for large files
-        wordCount = Math.ceil(wordCount * 0.8);
-      }
-
+      wordCount = Math.ceil(fileSizeInMB * 800); // Rough estimate of 800 words per MB
       isEstimate = true;
-      // For images and other files, estimate charCount based on wordCount
-      charCount = wordCount * 5; // Rough estimate of 5 chars per word
     }
 
-    // Adjust confidence range to be less aggressive
+    // Provide a range if it's an estimate
     const estimateRange = isEstimate
       ? {
-          minWordCount: Math.ceil(wordCount * 0.75), // -25%
-          maxWordCount: Math.ceil(wordCount * 1.35), // +35%
+          minWordCount: Math.floor(wordCount * 0.7), // -30%
+          maxWordCount: Math.ceil(wordCount * 1.3), // +30%
         }
       : null;
 

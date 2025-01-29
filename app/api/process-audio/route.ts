@@ -27,14 +27,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the current user
-    const supabase = createClient(request);
+    // Get the current user with proper cookie handling
+    const supabase = await createClient(request);
+
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
-    if (authError || !user) {
+    if (authError) {
+      console.error("Auth error:", authError);
+      return NextResponse.json(
+        { error: "Authentication error" },
+        { status: 401 }
+      );
+    }
+
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -97,11 +106,19 @@ export async function POST(request: Request) {
     });
 
     // Check user credits
-    const { data: credits } = await supabase
+    const { data: credits, error: creditsError } = await supabase
       .from("user_credits")
       .select("credits")
       .eq("user_id", user.id)
       .single();
+
+    if (creditsError) {
+      console.error("Credits error:", creditsError);
+      return NextResponse.json(
+        { error: "Failed to check credits" },
+        { status: 500 }
+      );
+    }
 
     if (!credits || credits.credits < costs.total) {
       return NextResponse.json(
@@ -129,11 +146,12 @@ export async function POST(request: Request) {
     }
 
     // Get signed URL
-    const { data: urlData } = await supabase.storage
+    const { data: urlData, error: urlError } = await supabase.storage
       .from("audio_recordings")
       .createSignedUrl(fileName, 3600);
 
-    if (!urlData?.signedUrl) {
+    if (urlError || !urlData?.signedUrl) {
+      console.error("URL generation error:", urlError);
       throw new Error("Failed to generate signed URL");
     }
 
@@ -146,6 +164,7 @@ export async function POST(request: Request) {
       .single();
 
     if (updateError) {
+      console.error("Credits update error:", updateError);
       throw new Error("Failed to update credits");
     }
 

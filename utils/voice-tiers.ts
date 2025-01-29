@@ -36,7 +36,7 @@ export async function checkTotalTTSUsage(request: Request): Promise<{
   selectedTier: (typeof VOICE_TIERS)[VoiceTier];
   usage: TotalUsage;
 }> {
-  const supabase = createClient(request);
+  const supabase = await createClient(request);
 
   // Get current total usage
   const { data: totalUsage } = await supabase
@@ -110,7 +110,7 @@ export async function updateTotalTTSUsage(
   tier: string,
   charactersUsed: number
 ): Promise<void> {
-  const supabase = createClient(request);
+  const supabase = await createClient(request);
 
   // Update the total characters used for this tier
   await supabase.rpc("increment_total_tts_usage", {
