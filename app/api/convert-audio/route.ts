@@ -3,18 +3,11 @@ import { createClient } from "@/utils/supabase/server";
 import ffmpeg from "fluent-ffmpeg";
 import { Readable } from "stream";
 import { PassThrough } from "stream";
-
-export const SUPPORTED_FORMATS = {
-  mp3: "MP3 - Most compatible",
-  wav: "WAV - Uncompressed",
-  ogg: "OGG - Open format",
-  m4a: "M4A - Apple format",
-} as const;
-
-export type AudioFormat = keyof typeof SUPPORTED_FORMATS;
+import { SUPPORTED_FORMATS, AudioFormat } from "@/constants/audio";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
