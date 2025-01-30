@@ -1,10 +1,42 @@
 import textToSpeech from "@google-cloud/text-to-speech";
 import { google } from "@google-cloud/text-to-speech/build/protos/protos";
 
-// Initialize Google Cloud TTS client
-const client = new textToSpeech.TextToSpeechClient({
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
+// Function to decode and parse credentials
+function getCredentials() {
+  const credentialsBase64 = process.env.GOOGLE_CREDENTIALS_BASE64;
+  if (!credentialsBase64) {
+    throw new Error(
+      "GOOGLE_CREDENTIALS_BASE64 environment variable is not set"
+    );
+  }
+
+  try {
+    // Decode base64 and parse as JSON
+    const credentialsJson = Buffer.from(credentialsBase64, "base64").toString();
+    const credentials = JSON.parse(credentialsJson);
+
+    // Validate the credentials object
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error("Invalid credentials format: missing required fields");
+    }
+
+    return credentials;
+  } catch (error) {
+    console.error("Error parsing Google credentials:", error);
+    throw new Error("Invalid GOOGLE_CREDENTIALS_BASE64 format");
+  }
+}
+
+// Initialize Google Cloud TTS client with proper error handling
+let client: InstanceType<typeof textToSpeech.TextToSpeechClient>;
+try {
+  client = new textToSpeech.TextToSpeechClient({
+    credentials: getCredentials(),
+  });
+} catch (error) {
+  console.error("Failed to initialize Google TTS client:", error);
+  throw error;
+}
 
 // Voice configurations for different tiers
 const VOICE_CONFIGS = {
@@ -44,8 +76,8 @@ function preprocessText(text: string) {
   // Process each potential long sentence
   const processedSentences = sentences.map((sentence) => {
     const trimmed = sentence.trim();
-    if (trimmed.length > 200 && !trimmed.match(/[.!?]$/)) {
-      // Split long sentences at natural break points
+    if (trimmed.length > 200) {
+      // Break long sentences at natural points
       const parts = sentence.split(
         /([,;:]|\s+and\s+|\s+but\s+|\s+or\s+|\s+so\s+)/
       );
@@ -69,25 +101,34 @@ export async function getGoogleTTS(
   text: string,
   voiceId: string
 ): Promise<Buffer> {
-  // Get voice configuration
-  const voiceConfig = VOICE_CONFIGS[voiceId as keyof typeof VOICE_CONFIGS];
-  if (!voiceConfig) {
-    throw new Error(`Invalid voice ID: ${voiceId}`);
+  try {
+    // Get voice configuration
+    const voiceConfig = VOICE_CONFIGS[voiceId as keyof typeof VOICE_CONFIGS];
+    if (!voiceConfig) {
+      throw new Error(`Invalid voice ID: ${voiceId}`);
+    }
+
+    // Preprocess the text
+    const processedText = preprocessText(text);
+
+    // Create the synthesis input
+    const request = {
+      input: { text: processedText },
+      voice: voiceConfig,
+      audioConfig: { audioEncoding: "MP3" as const },
+    };
+
+    // Perform the text-to-speech request
+    const [response] = await client.synthesizeSpeech(request);
+    if (!response.audioContent) {
+      throw new Error("No audio content received from Google TTS");
+    }
+
+    return Buffer.from(response.audioContent);
+  } catch (error) {
+    console.error("Google TTS error:", error);
+    throw new Error(
+      error instanceof Error ? error.message : "Failed to generate speech"
+    );
   }
-
-  // Preprocess the text
-  const processedText = preprocessText(text);
-
-  // Generate speech
-  const [response] = await client.synthesizeSpeech({
-    input: { text: processedText },
-    voice: voiceConfig,
-    audioConfig: { audioEncoding: "MP3" },
-  });
-
-  if (!response.audioContent) {
-    throw new Error("Failed to generate audio content");
-  }
-
-  return Buffer.from(response.audioContent);
 }
