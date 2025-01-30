@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
+import ffmpeg from "fluent-ffmpeg";
+import { Readable, PassThrough } from "stream";
 
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 
@@ -13,6 +15,7 @@ export const config = {
     bodyParser: false,
   },
   maxDuration: 60,
+  runtime: "nodejs", // Required for FFmpeg
 };
 
 // Supported mime types with their extensions
@@ -58,6 +61,36 @@ function shouldOptimizeBuffer(fileType: string, sizeInBytes: number): boolean {
   return sizeInBytes > 2 * 1024 * 1024;
 }
 
+async function convertToMp3(buffer: Buffer): Promise<Buffer> {
+  console.log("Converting WAV to MP3...");
+  const startTime = Date.now();
+  const inputStream = Readable.from(buffer);
+
+  const outputBuffer = await new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const passThrough = new PassThrough();
+    passThrough.on("data", (chunk) => chunks.push(chunk));
+
+    ffmpeg(inputStream)
+      .toFormat("mp3")
+      .audioBitrate("128k")
+      .audioChannels(1)
+      .on("error", reject)
+      .on("end", () => {
+        const finalBuffer = Buffer.concat(chunks);
+        console.log("Conversion took:", Date.now() - startTime, "ms");
+        console.log(
+          "Converted size:",
+          (finalBuffer.length / (1024 * 1024)).toFixed(2) + "MB"
+        );
+        resolve(finalBuffer);
+      })
+      .pipe(passThrough);
+  });
+
+  return outputBuffer;
+}
+
 async function transcribeAudio(
   buffer: Buffer,
   contentType: string
@@ -72,7 +105,7 @@ async function transcribeAudio(
     console.log("Converting to more efficient format...");
     if (contentType === "audio/wav") {
       finalContentType = "audio/mp3";
-      finalBuffer = buffer; // In real implementation, you'd convert the buffer here
+      finalBuffer = await convertToMp3(buffer);
     }
   }
 
