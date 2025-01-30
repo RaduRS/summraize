@@ -6,12 +6,6 @@ import { cn } from "@/lib/utils";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { Metadata } from "next";
-import { setupGoogleCredentials } from "@/utils/google-cred";
-
-// Only run on server
-if (typeof window === "undefined") {
-  setupGoogleCredentials();
-}
 
 const geistSans = Geist({
   subsets: ["latin"],
