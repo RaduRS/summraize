@@ -8,8 +8,10 @@ import "./globals.css";
 import { Metadata } from "next";
 import { setupGoogleCredentials } from "@/utils/google-cred";
 
-// Setup Google credentials on server startup
-setupGoogleCredentials();
+// Only run on server
+if (typeof window === "undefined") {
+  setupGoogleCredentials();
+}
 
 const geistSans = Geist({
   subsets: ["latin"],
