@@ -23,9 +23,7 @@ export function AudioPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(initialDuration || 0);
-  const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const playPromiseRef = useRef<Promise<void> | null>(null);
 
   const formatTime = (time: number) => {
     if (!time || isNaN(time) || !isFinite(time)) return "0:00";
@@ -38,13 +36,7 @@ export function AudioPlayer({
     const audio = audioRef.current;
     if (!audio) return;
 
-    const handleTimeUpdate = () => {
-      const newTime = audio.currentTime;
-      if (!isNaN(newTime) && isFinite(newTime)) {
-        setCurrentTime(newTime);
-      }
-    };
-
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
     const handleDurationChange = () => {
       if (
         audio.duration &&
@@ -56,30 +48,11 @@ export function AudioPlayer({
         setDuration(initialDuration);
       }
     };
-
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-      if (audio.currentTime !== 0) {
-        audio.currentTime = 0;
-      }
-    };
-
+    const handleEnded = () => setIsPlaying(false);
     const handleError = (e: Event) => {
       console.error("Audio playback error:", e);
       setIsPlaying(false);
-      setIsLoading(false);
       if (onError) onError();
-    };
-
-    const handlePause = () => {
-      setIsPlaying(false);
-      setIsLoading(false);
-    };
-
-    const handlePlay = () => {
-      setIsPlaying(true);
-      setIsLoading(false);
     };
 
     // Add event listeners
@@ -87,111 +60,54 @@ export function AudioPlayer({
     audio.addEventListener("durationchange", handleDurationChange);
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("error", handleError);
-    audio.addEventListener("pause", handlePause);
-    audio.addEventListener("play", handlePlay);
-    audio.addEventListener("playing", () => setIsLoading(false));
-    audio.addEventListener("waiting", () => setIsLoading(true));
-    audio.addEventListener("canplay", () => setIsLoading(false));
+    audio.addEventListener("pause", () => setIsPlaying(false));
+    audio.addEventListener("play", () => setIsPlaying(true));
 
     // Set initial duration if provided
     if (initialDuration) {
       setDuration(initialDuration);
     }
 
+    // iOS specific setup
+    audio.load();
+
     return () => {
-      // Cleanup event listeners
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("durationchange", handleDurationChange);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("error", handleError);
-      audio.removeEventListener("pause", handlePause);
-      audio.removeEventListener("play", handlePlay);
-      audio.removeEventListener("playing", () => setIsLoading(false));
-      audio.removeEventListener("waiting", () => setIsLoading(true));
-      audio.removeEventListener("canplay", () => setIsLoading(false));
+      audio.removeEventListener("pause", () => setIsPlaying(false));
+      audio.removeEventListener("play", () => setIsPlaying(true));
     };
-  }, [initialDuration, onError]);
+  }, [initialDuration, onError, src]);
 
   const togglePlayPause = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    if (!audioRef.current) return;
 
     try {
-      setIsLoading(true);
-
-      // If there's an ongoing play operation, wait for it
-      if (playPromiseRef.current) {
-        await playPromiseRef.current;
-      }
-
       if (isPlaying) {
-        audio.pause();
-        setIsPlaying(false);
+        audioRef.current.pause();
       } else {
-        // For iOS, we need to handle the play promise
-        playPromiseRef.current = audio.play();
-        try {
-          await playPromiseRef.current;
-          setIsPlaying(true);
-        } catch (error) {
-          console.error("Play promise error:", error);
-          setIsPlaying(false);
-          if (onError) onError();
-        } finally {
-          playPromiseRef.current = null;
-        }
+        // For iOS, we need to load the audio first
+        audioRef.current.load();
+        await audioRef.current.play();
       }
     } catch (error) {
       console.error("Playback error:", error);
       setIsPlaying(false);
-      if (onError) onError();
-    } finally {
-      setIsLoading(false);
+      if (onError) {
+        onError();
+      }
     }
   };
 
-  const handleSliderChange = async (value: number[]) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
+  const handleSliderChange = (value: number[]) => {
+    if (!audioRef.current) return;
     try {
-      setIsLoading(true);
-      const wasPlaying = !audio.paused;
-
-      // Cancel any ongoing play operation
-      if (playPromiseRef.current) {
-        audio.pause();
-        playPromiseRef.current = null;
-      }
-
-      // Set the new time
-      audio.currentTime = value[0];
+      audioRef.current.currentTime = value[0];
       setCurrentTime(value[0]);
-
-      // Only attempt to play if it was playing before
-      if (wasPlaying) {
-        try {
-          // Small delay to ensure the seek is complete
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          const playPromise = audio.play();
-          playPromiseRef.current = playPromise;
-          await playPromise;
-          setIsPlaying(true);
-        } catch (error: unknown) {
-          // Ignore AbortError as it's expected when seeking rapidly
-          if (error instanceof Error && error.name !== "AbortError") {
-            console.error("Play after seek error:", error);
-            setIsPlaying(false);
-          }
-        } finally {
-          playPromiseRef.current = null;
-        }
-      }
     } catch (error) {
       console.error("Error setting audio time:", error);
-      setIsPlaying(false);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -224,16 +140,13 @@ export function AudioPlayer({
         onError={(e) => {
           console.error("Audio element error:", e);
           setIsPlaying(false);
-          setIsLoading(false);
           onError?.();
         }}
         onLoadedMetadata={handleLoadedMetadata}
-        onEnded={() => {
-          setIsPlaying(false);
-          setCurrentTime(0);
-        }}
-        playsInline
-        preload="auto"
+        onEnded={() => setIsPlaying(false)}
+        onPause={() => setIsPlaying(false)}
+        playsInline // Important for iOS
+        preload="auto" // Preload audio data
       />
 
       <Button
@@ -241,7 +154,6 @@ export function AudioPlayer({
         variant="ghost"
         size="sm"
         className="h-8 w-8 p-0"
-        disabled={isLoading}
       >
         {isPlaying ? (
           <Pause className="h-4 w-4" />
@@ -260,7 +172,6 @@ export function AudioPlayer({
           step={0.1}
           onValueChange={handleSliderChange}
           className="flex-1"
-          disabled={isLoading}
         />
         <span className="text-sm text-muted-foreground min-w-[40px]">
           {formatTime(duration)}
