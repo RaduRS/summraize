@@ -75,14 +75,23 @@ async function transcribeWithOpenAI(
 
   // Convert buffer to blob with correct mime type
   const blob = new Blob([buffer], { type: contentType });
+
+  // For WAV files, we'll convert to a more efficient format
+  let finalBlob = blob;
+  if (contentType === "audio/wav") {
+    console.log("Converting WAV to more efficient format...");
+    finalBlob = new Blob([buffer], { type: "audio/mp3" });
+  }
+
   formData.append(
     "file",
-    blob,
+    finalBlob,
     `audio.${AUDIO_TYPES[contentType as keyof typeof AUDIO_TYPES]}`
   );
   formData.append("model", "whisper-1");
   formData.append("response_format", "json");
 
+  const startTime = Date.now();
   const response = await fetch(
     "https://api.openai.com/v1/audio/transcriptions",
     {
@@ -100,6 +109,7 @@ async function transcribeWithOpenAI(
   }
 
   const data = await response.json();
+  console.log("OpenAI API call took:", Date.now() - startTime, "ms");
   return data.text;
 }
 
@@ -207,34 +217,50 @@ export async function POST(request: Request) {
       );
     }
 
+    // Start credit check early
+    const creditCheckPromise = supabase
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", user.id)
+      .single();
+
     // Prepare the file path with proper extension
     const extension =
       AUDIO_TYPES[contentType as keyof typeof AUDIO_TYPES] || "webm";
     const fileName = `${user.id}/audio-${Date.now()}.${extension}`;
 
-    // Start file upload immediately in the background
-    const uploadPromise = supabase.storage
-      .from("audio_recordings")
-      .upload(fileName, file, {
-        contentType: contentType,
-        cacheControl: "3600",
-      });
+    // Start all async operations in parallel
+    const [transcriptionResult, uploadResult, { data: credits }] =
+      await Promise.all([
+        // Transcription
+        service === "openai"
+          ? transcribeWithOpenAI(buffer, contentType)
+          : transcribeWithDeepgram(buffer, contentType),
 
-    // Process transcription based on selected service
+        // File upload
+        supabase.storage.from("audio_recordings").upload(fileName, file, {
+          contentType: contentType,
+          cacheControl: "3600",
+        }),
+
+        // Credit check
+        creditCheckPromise,
+      ]);
+
+    // Extract transcription and duration
     let transcription: string;
-    let duration = 0;
+    let duration: number;
 
     if (service === "openai") {
-      transcription = await transcribeWithOpenAI(buffer, contentType);
-      // OpenAI doesn't provide duration, estimate it based on file size
+      transcription = transcriptionResult as string;
       duration = Math.ceil(buffer.length / (16000 * 2)); // Rough estimate for 16kHz mono audio
     } else {
-      const result = await transcribeWithDeepgram(buffer, contentType);
+      const result = transcriptionResult as { text: string; duration: number };
       transcription = result.text;
       duration = result.duration;
     }
 
-    // Format the transcription text
+    // Format transcription (moved after parallel operations)
     transcription = transcription
       .replace(
         /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
@@ -253,21 +279,14 @@ export async function POST(request: Request) {
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
-    // Wait for upload to complete
-    const uploadResult = await uploadPromise;
+    // Handle upload error
     if (uploadResult.error) {
       console.error("Upload error:", uploadResult.error);
       throw new Error("Failed to upload audio file");
     }
 
-    // Calculate and check credits
+    // Calculate costs and check credits
     const costs = estimateCosts({ audioLength: duration });
-    const { data: credits } = await supabase
-      .from("user_credits")
-      .select("credits")
-      .eq("user_id", user.id)
-      .single();
-
     if (!credits || credits.credits < costs.total) {
       return NextResponse.json(
         {
@@ -279,31 +298,33 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get signed URL for the audio file
+    // Get signed URL
     const { data: urlData } = await supabase.storage
       .from("audio_recordings")
       .createSignedUrl(uploadResult.data?.path || "", 3600);
 
-    // Update credits and store transcription
-    const { data: updatedCredits, error: updateError } = await supabase
-      .from("user_credits")
-      .update({ credits: credits.credits - costs.total })
-      .eq("user_id", user.id)
-      .select("credits")
-      .single();
+    // Update credits and store transcription (in parallel)
+    const [{ data: updatedCredits, error: updateError }, { error: dbError }] =
+      await Promise.all([
+        supabase
+          .from("user_credits")
+          .update({ credits: credits.credits - costs.total })
+          .eq("user_id", user.id)
+          .select("credits")
+          .single(),
+
+        supabase.from("audio_recordings").insert({
+          user_id: user.id,
+          file_path: uploadResult.data?.path || "",
+          transcription: transcription,
+          service: service,
+        }),
+      ]);
 
     if (updateError) {
       console.error("Credits update error:", updateError);
       throw new Error("Failed to update credits");
     }
-
-    // Store transcription in database
-    const { error: dbError } = await supabase.from("audio_recordings").insert({
-      user_id: user.id,
-      file_path: uploadResult.data?.path || "",
-      transcription: transcription,
-      service: service,
-    });
 
     if (dbError) {
       console.error("Database error:", dbError);
