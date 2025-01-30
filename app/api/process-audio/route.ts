@@ -15,18 +15,40 @@ export const config = {
   maxDuration: 60,
 };
 
-// Supported mime types
-const SUPPORTED_AUDIO_TYPES = [
-  "audio/webm",
-  "audio/mp4",
-  "audio/m4a",
-  "audio/mpeg",
-  "audio/wav",
-  "audio/x-m4a",
-];
+// Supported mime types with their extensions
+const AUDIO_TYPES = {
+  "audio/webm": "webm",
+  "audio/mp4": "mp4",
+  "audio/m4a": "m4a",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/x-m4a": "m4a",
+} as const;
 
 // Maximum file size (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+// Helper function to detect actual file type from buffer
+function detectFileType(buffer: Buffer): string | null {
+  // WAV file starts with RIFF
+  if (buffer.toString("ascii", 0, 4) === "RIFF") {
+    return "audio/wav";
+  }
+  // MP4/M4A file starts with ftyp
+  if (buffer.toString("ascii", 4, 8) === "ftyp") {
+    return "audio/mp4";
+  }
+  // WebM file starts with 1A 45 DF A3
+  if (
+    buffer[0] === 0x1a &&
+    buffer[1] === 0x45 &&
+    buffer[2] === 0xdf &&
+    buffer[3] === 0xa3
+  ) {
+    return "audio/webm";
+  }
+  return null;
+}
 
 // Helper function to determine if we should optimize the buffer
 function shouldOptimizeBuffer(fileType: string, sizeInBytes: number): boolean {
@@ -50,18 +72,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate file type and size
-    console.log("File received:", {
+    // Convert to buffer first to check actual file type
+    const startTime = Date.now();
+    const buffer = Buffer.from(await file.arrayBuffer());
+    console.log("Buffer conversion took:", Date.now() - startTime, "ms");
+    const actualFileType = detectFileType(buffer);
+
+    console.log("File details:", {
       name: file.name,
-      type: file.type,
+      declaredType: file.type,
+      actualType: actualFileType,
       size: file.size,
       sizeInMB: (file.size / (1024 * 1024)).toFixed(2) + "MB",
     });
 
-    if (!SUPPORTED_AUDIO_TYPES.includes(file.type)) {
+    // Use actual file type if detected, otherwise fall back to declared type
+    const contentType = actualFileType || file.type;
+
+    if (!Object.keys(AUDIO_TYPES).includes(contentType)) {
       return NextResponse.json(
         {
-          error: `Unsupported file type. Supported types: ${SUPPORTED_AUDIO_TYPES.join(", ")}`,
+          error: `Unsupported file type. Supported types: ${Object.keys(AUDIO_TYPES).join(", ")}`,
         },
         { status: 400 }
       );
@@ -89,28 +120,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Convert File to buffer and log size at each step
-    console.log("Converting file to buffer...");
-    const startTime = Date.now();
-    let buffer = Buffer.from(await file.arrayBuffer());
-    console.log("Buffer conversion took:", Date.now() - startTime, "ms");
-    console.log(
-      "Initial buffer size:",
-      (buffer.length / (1024 * 1024)).toFixed(2) + "MB"
-    );
+    // Prepare optimized buffer for Deepgram
+    let deepgramBuffer = buffer;
+    let deepgramContentType = contentType;
 
-    // Determine content type for Deepgram
-    let contentType = file.type;
-    if (contentType === "audio/x-m4a") {
-      contentType = "audio/mp4";
-    }
+    // Basic Deepgram settings that work with all plans
+    const deepgramParams = new URLSearchParams({
+      model: "nova-2",
+      smart_format: "true",
+      punctuate: "true",
+    });
 
     // Prepare the file path with proper extension
-    const fileExtension =
-      file.type === "audio/x-m4a" ? "m4a" : file.type.split("/")[1] || "webm";
-    const fileName = `${user.id}/audio-${Date.now()}.${fileExtension}`;
+    const extension =
+      AUDIO_TYPES[contentType as keyof typeof AUDIO_TYPES] || "webm";
+    const fileName = `${user.id}/audio-${Date.now()}.${extension}`;
 
-    // Start both Deepgram processing and file upload in parallel
     console.log("Starting parallel processing...");
     const [transcriptionResponse, uploadResult] = await Promise.all([
       (async () => {
@@ -120,14 +145,14 @@ export async function POST(request: Request) {
 
         try {
           const response = await fetch(
-            "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&detect_language=true&punctuate=true&paragraphs=true&channels=1",
+            "https://api.deepgram.com/v1/listen?" + deepgramParams.toString(),
             {
               method: "POST",
               headers: {
                 Authorization: `Token ${DEEPGRAM_API_KEY}`,
-                "Content-Type": contentType,
+                "Content-Type": deepgramContentType,
               },
-              body: buffer,
+              body: deepgramBuffer,
               signal: controller.signal,
             }
           );
@@ -140,7 +165,7 @@ export async function POST(request: Request) {
       })(),
       // Upload the original file (not the optimized buffer)
       supabase.storage.from("audio_recordings").upload(fileName, file, {
-        contentType: file.type,
+        contentType: contentType,
         cacheControl: "3600",
       }),
     ]);
