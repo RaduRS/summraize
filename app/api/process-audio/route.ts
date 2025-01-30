@@ -17,15 +17,23 @@ export const config = {
 
 export async function POST(request: Request) {
   try {
+    console.log("Starting audio processing...");
     const formData = await request.formData();
     const file = formData.get("audio");
 
     if (!file || !(file instanceof File)) {
+      console.error("Invalid file:", file);
       return NextResponse.json(
         { error: "No audio file provided" },
         { status: 400 }
       );
     }
+
+    console.log("File received:", {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+    });
 
     // Get the current user with proper cookie handling
     const supabase = await createClient(request);
@@ -44,12 +52,16 @@ export async function POST(request: Request) {
     }
 
     if (!user) {
+      console.error("No user found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    console.log("Converting file to buffer...");
     // Convert File to buffer for Deepgram
     const buffer = Buffer.from(await file.arrayBuffer());
+    console.log("Buffer size:", buffer.length);
 
+    console.log("Calling Deepgram API...");
     // Call Deepgram API
     const response = await fetch(
       "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&detect_language=true&punctuate=true&paragraphs=true",
@@ -57,16 +69,23 @@ export async function POST(request: Request) {
         method: "POST",
         headers: {
           Authorization: `Token ${DEEPGRAM_API_KEY}`,
-          "Content-Type": "audio/webm",
+          "Content-Type": file.type || "audio/webm",
         },
         body: buffer,
       }
     );
 
     if (!response.ok) {
-      throw new Error("Failed to transcribe audio with Deepgram");
+      const errorText = await response.text();
+      console.error("Deepgram API error:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+      });
+      throw new Error(`Failed to transcribe audio with Deepgram: ${errorText}`);
     }
 
+    console.log("Processing Deepgram response...");
     const data = await response.json();
 
     // Get the raw transcription

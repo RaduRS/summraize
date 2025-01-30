@@ -67,26 +67,58 @@ export function AudioPlayer({
 
   const togglePlayPause = () => {
     if (!audioRef.current) return;
+
     if (isPlaying) {
       audioRef.current.pause();
+      setIsPlaying(false);
     } else {
-      audioRef.current.play();
+      // Handle iOS audio playback
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlaying(true);
+          })
+          .catch((error) => {
+            console.error("Playback error:", error);
+            setIsPlaying(false);
+            if (onError) {
+              onError();
+            }
+          });
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleSliderChange = (value: number[]) => {
     if (!audioRef.current) return;
-    audioRef.current.currentTime = value[0];
-    setCurrentTime(value[0]);
+    try {
+      audioRef.current.currentTime = value[0];
+      setCurrentTime(value[0]);
+    } catch (error) {
+      console.error("Error setting audio time:", error);
+    }
   };
 
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLAudioElement>) => {
-    const audio = e.target as HTMLAudioElement;
-    if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-      setDuration(audio.duration);
+    try {
+      const audio = e.target as HTMLAudioElement;
+      if (
+        audio.duration &&
+        !isNaN(audio.duration) &&
+        isFinite(audio.duration)
+      ) {
+        setDuration(audio.duration);
+      } else if (initialDuration) {
+        setDuration(initialDuration);
+      }
+      onLoadedMetadata?.(e);
+    } catch (error) {
+      console.error("Error handling metadata:", error);
+      if (initialDuration) {
+        setDuration(initialDuration);
+      }
     }
-    onLoadedMetadata?.(e);
   };
 
   return (
@@ -94,8 +126,15 @@ export function AudioPlayer({
       <audio
         ref={audioRef}
         src={src}
-        onError={onError}
+        onError={(e) => {
+          console.error("Audio element error:", e);
+          setIsPlaying(false);
+          onError?.();
+        }}
         onLoadedMetadata={handleLoadedMetadata}
+        onEnded={() => setIsPlaying(false)}
+        onPause={() => setIsPlaying(false)}
+        playsInline // Important for iOS
       />
 
       <Button

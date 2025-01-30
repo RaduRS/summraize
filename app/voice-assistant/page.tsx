@@ -65,7 +65,18 @@ export default function VoiceAssistant() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      // Use more iOS-compatible options
+      const options = {
+        mimeType: "audio/webm;codecs=opus",
+      };
+
+      // Check if the browser supports WebM
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        // Fallback for iOS
+        options.mimeType = "audio/mp4";
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -82,7 +93,9 @@ export default function VoiceAssistant() {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const audioBlob = new Blob(chunksRef.current, {
+          type: mediaRecorder.mimeType || "audio/webm",
+        });
         handleAudioReady(audioBlob);
       };
 
@@ -90,9 +103,11 @@ export default function VoiceAssistant() {
       setIsRecording(true);
     } catch (err) {
       console.error("Error accessing microphone:", err);
-      alert(
-        "Error accessing microphone. Please ensure you have granted permission."
-      );
+      toast({
+        title: "Microphone Error",
+        description: "Please ensure you have granted microphone permission.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -203,6 +218,7 @@ export default function VoiceAssistant() {
   };
 
   const handleAudioReady = async (blob: Blob) => {
+    console.log("Audio ready with type:", blob.type);
     // Create an audio element to get duration
     const audio = new Audio();
     const url = URL.createObjectURL(blob);
@@ -210,8 +226,22 @@ export default function VoiceAssistant() {
     try {
       // Wait for audio metadata to load
       await new Promise((resolve, reject) => {
-        audio.addEventListener("loadedmetadata", resolve);
-        audio.addEventListener("error", reject);
+        const handleLoad = () => {
+          audio.removeEventListener("loadedmetadata", handleLoad);
+          audio.removeEventListener("error", handleError);
+          resolve(null);
+        };
+
+        const handleError = (e: Event) => {
+          audio.removeEventListener("loadedmetadata", handleLoad);
+          audio.removeEventListener("error", handleError);
+          console.error("Audio load error:", e);
+          // Don't reject, just resolve with the recording time
+          resolve(null);
+        };
+
+        audio.addEventListener("loadedmetadata", handleLoad);
+        audio.addEventListener("error", handleError);
         audio.src = url;
       });
 
