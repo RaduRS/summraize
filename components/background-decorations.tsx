@@ -30,10 +30,10 @@ export function BackgroundDecorations({
           }}
           className={`h-full ${
             i % 3 === 0
-              ? "bg-gradient-to-b from-transparent via-cyan-400 to-purple-400/50"
+              ? "bg-gradient-to-b from-transparent via-sky-200 to-purple-400/50"
               : i % 3 === 1
-                ? "bg-gradient-to-b from-transparent via-purple-400/50 via-cyan-400 to-transparent"
-                : "bg-gradient-to-b from-cyan-400 via-purple-400/50 to-cyan-400"
+                ? "bg-gradient-to-b from-transparent via-sky-200 to-transparent"
+                : "bg-gradient-to-b from-sky-200 via-purple-400/50 to-sky-200"
           } shadow-[0_0_8px_0px_rgba(34,211,238,0.3)] dark:shadow-[0_0_8px_0px_rgba(34,211,238,0.2)]`}
           style={{
             width: i % 2 === 0 ? "2px" : "1px",
@@ -62,42 +62,51 @@ export function BackgroundDecorations({
   }
 
   if (variant === "dots") {
-    const lineHeights = [5, 8, 12, 4, 9, 6, 11, 7, 10, 3];
+    const lineHeights = [10, 16, 24, 8, 18, 12, 22, 14, 20, 6];
     const skipPositions = [3, 9, 14, 20, 26, 31, 37];
 
     return (
       <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 flex flex-col gap-6">
-          {[...Array(50)].map((_, row) => (
-            <div
-              key={row}
-              className="w-full flex justify-between"
-              style={{
-                paddingLeft: row % 2 === 0 ? "24px" : "48px",
-                paddingRight: row % 2 === 0 ? "48px" : "24px",
-              }}
-            >
-              {[...Array(80)].map((_, i) => {
-                const shouldHide = skipPositions.some((pos) => i % pos === 0);
-                const height = lineHeights[i % lineHeights.length];
-                const isEven = i % 2 === 0;
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div
+            className="flex flex-col gap-6"
+            style={{
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "4000px",
+            }}
+          >
+            {[...Array(50)].map((_, row) => (
+              <div
+                key={row}
+                className="flex gap-6"
+                style={{
+                  marginLeft: row % 2 === 0 ? "24px" : "36px",
+                  width: "100%",
+                }}
+              >
+                {[...Array(300)].map((_, i) => {
+                  const shouldHide = skipPositions.some((pos) => i % pos === 0);
+                  const height = lineHeights[i % lineHeights.length];
+                  const isEven = i % 2 === 0;
 
-                return !shouldHide ? (
-                  <div
-                    key={i}
-                    className="flex-none"
-                    style={{
-                      width: "1px",
-                      height: `${height}px`,
-                      backgroundColor: isEven
-                        ? "rgb(34 211 238 / 0.2)"
-                        : "rgb(168 85 247 / 0.15)",
-                    }}
-                  />
-                ) : null;
-              })}
-            </div>
-          ))}
+                  return !shouldHide ? (
+                    <div
+                      key={i}
+                      style={{
+                        width: "1px",
+                        height: `${height}px`,
+                        background: isEven
+                          ? "linear-gradient(to bottom, transparent, rgb(34 211 238 / 0.2) 50%, transparent)"
+                          : "linear-gradient(to bottom, transparent, rgb(168 85 247 / 0.15) 50%, transparent)",
+                      }}
+                    />
+                  ) : null;
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
