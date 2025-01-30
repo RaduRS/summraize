@@ -44,48 +44,59 @@ export function AudioPlayer({
         isFinite(audio.duration)
       ) {
         setDuration(audio.duration);
-      } else {
-        setDuration(initialDuration || 0);
+      } else if (initialDuration) {
+        setDuration(initialDuration);
       }
     };
     const handleEnded = () => setIsPlaying(false);
+    const handleError = (e: Event) => {
+      console.error("Audio playback error:", e);
+      setIsPlaying(false);
+      if (onError) onError();
+    };
 
+    // Add event listeners
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("durationchange", handleDurationChange);
     audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("error", handleError);
+    audio.addEventListener("pause", () => setIsPlaying(false));
+    audio.addEventListener("play", () => setIsPlaying(true));
 
+    // Set initial duration if provided
     if (initialDuration) {
       setDuration(initialDuration);
     }
+
+    // iOS specific setup
+    audio.load();
 
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("durationchange", handleDurationChange);
       audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("error", handleError);
+      audio.removeEventListener("pause", () => setIsPlaying(false));
+      audio.removeEventListener("play", () => setIsPlaying(true));
     };
-  }, [initialDuration]);
+  }, [initialDuration, onError, src]);
 
-  const togglePlayPause = () => {
+  const togglePlayPause = async () => {
     if (!audioRef.current) return;
 
-    if (isPlaying) {
-      audioRef.current.pause();
+    try {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        // For iOS, we need to load the audio first
+        audioRef.current.load();
+        await audioRef.current.play();
+      }
+    } catch (error) {
+      console.error("Playback error:", error);
       setIsPlaying(false);
-    } else {
-      // Handle iOS audio playback
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            setIsPlaying(true);
-          })
-          .catch((error) => {
-            console.error("Playback error:", error);
-            setIsPlaying(false);
-            if (onError) {
-              onError();
-            }
-          });
+      if (onError) {
+        onError();
       }
     }
   };
@@ -135,6 +146,7 @@ export function AudioPlayer({
         onEnded={() => setIsPlaying(false)}
         onPause={() => setIsPlaying(false)}
         playsInline // Important for iOS
+        preload="auto" // Preload audio data
       />
 
       <Button

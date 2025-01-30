@@ -129,40 +129,23 @@ export default function VoiceAssistant() {
 
       // Wait for the ondataavailable event to complete
       await new Promise<void>((resolve) => {
-        mediaRecorderRef.current!.onstop = async () => {
-          const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+        if (!mediaRecorderRef.current) return resolve();
 
-          // Process audio duration before showing UI
-          const audio = new Audio();
-          const url = URL.createObjectURL(audioBlob);
-
-          try {
-            await new Promise((resolve, reject) => {
-              audio.addEventListener("loadedmetadata", resolve);
-              audio.addEventListener("error", reject);
-              audio.src = url;
-            });
-
-            if (
-              audio.duration &&
-              !isNaN(audio.duration) &&
-              isFinite(audio.duration)
-            ) {
-              setAudioDuration(audio.duration);
-            } else {
-              setAudioDuration(finalDuration); // Use recorded duration as fallback
-            }
-          } catch (error) {
-            console.error("Error loading audio:", error);
-            setAudioDuration(finalDuration);
-          } finally {
-            URL.revokeObjectURL(url);
-          }
+        mediaRecorderRef.current.onstop = async () => {
+          // Use the same MIME type as used when starting the recording
+          const audioBlob = new Blob(chunksRef.current, {
+            type: mediaRecorderRef.current?.mimeType || "audio/mp4",
+          });
+          console.log("Recording stopped, blob type:", audioBlob.type);
 
           // Now update the UI with the processed audio
           setAudioBlob(audioBlob);
           setResult(null);
           setTtsAudioUrl(null);
+
+          // Set duration using the recording time as it's more reliable
+          setAudioDuration(recordingTime);
+          setFinalDuration(recordingTime);
           resolve();
         };
       });
@@ -219,55 +202,63 @@ export default function VoiceAssistant() {
 
   const handleAudioReady = async (blob: Blob) => {
     console.log("Audio ready with type:", blob.type);
-    // Create an audio element to get duration
-    const audio = new Audio();
-    const url = URL.createObjectURL(blob);
 
-    try {
-      // Wait for audio metadata to load
-      await new Promise((resolve, reject) => {
-        const handleLoad = () => {
-          audio.removeEventListener("loadedmetadata", handleLoad);
-          audio.removeEventListener("error", handleError);
-          resolve(null);
-        };
-
-        const handleError = (e: Event) => {
-          audio.removeEventListener("loadedmetadata", handleLoad);
-          audio.removeEventListener("error", handleError);
-          console.error("Audio load error:", e);
-          // Don't reject, just resolve with the recording time
-          resolve(null);
-        };
-
-        audio.addEventListener("loadedmetadata", handleLoad);
-        audio.addEventListener("error", handleError);
-        audio.src = url;
-      });
-
-      // Set duration if valid, otherwise use recordingTime
-      if (
-        audio.duration &&
-        !isNaN(audio.duration) &&
-        isFinite(audio.duration)
-      ) {
-        setAudioDuration(audio.duration);
-        setFinalDuration(audio.duration);
-      } else {
-        setAudioDuration(recordingTime);
-        setFinalDuration(recordingTime);
-      }
-    } catch (error) {
-      console.error("Error loading audio:", error);
-      // Use recordingTime as fallback
-      setAudioDuration(recordingTime);
-      setFinalDuration(recordingTime);
-    } finally {
-      // Cleanup
-      URL.revokeObjectURL(url);
+    // For iOS compatibility, if the blob is not in a supported format, convert it
+    let finalBlob = blob;
+    if (
+      blob.type === "audio/webm" &&
+      !MediaRecorder.isTypeSupported("audio/webm")
+    ) {
+      finalBlob = new Blob([blob], { type: "audio/mp4" });
     }
 
-    setAudioBlob(blob);
+    // Set duration using the recording time as it's more reliable for recordings
+    if (recordingTime > 0) {
+      setAudioDuration(recordingTime);
+      setFinalDuration(recordingTime);
+    } else {
+      // For uploaded files, try to get the duration
+      const audio = new Audio();
+      const url = URL.createObjectURL(finalBlob);
+
+      try {
+        await new Promise((resolve) => {
+          const handleLoad = () => {
+            audio.removeEventListener("loadedmetadata", handleLoad);
+            audio.removeEventListener("error", handleError);
+            resolve(null);
+          };
+
+          const handleError = () => {
+            audio.removeEventListener("loadedmetadata", handleLoad);
+            audio.removeEventListener("error", handleError);
+            console.log(
+              "Could not load audio metadata, using default duration"
+            );
+            resolve(null);
+          };
+
+          audio.addEventListener("loadedmetadata", handleLoad);
+          audio.addEventListener("error", handleError);
+          audio.src = url;
+        });
+
+        if (
+          audio.duration &&
+          !isNaN(audio.duration) &&
+          isFinite(audio.duration)
+        ) {
+          setAudioDuration(audio.duration);
+          setFinalDuration(audio.duration);
+        }
+      } catch (error) {
+        console.error("Error loading audio:", error);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    setAudioBlob(finalBlob);
     setResult(null);
     setTtsAudioUrl(null);
   };
