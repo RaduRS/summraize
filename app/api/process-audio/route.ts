@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
-import ffmpeg from "fluent-ffmpeg";
-import { Readable, PassThrough } from "stream";
 
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 
@@ -15,7 +13,6 @@ export const config = {
     bodyParser: false,
   },
   maxDuration: 60,
-  runtime: "nodejs", // Required for FFmpeg
 };
 
 // Supported mime types with their extensions
@@ -55,40 +52,8 @@ function detectFileType(buffer: Buffer): string | null {
 
 // Helper function to determine if we should optimize the buffer
 function shouldOptimizeBuffer(fileType: string, sizeInBytes: number): boolean {
-  // Always optimize WAV files as they're uncompressed
-  if (fileType === "audio/wav") return true;
-  // Optimize any file over 2MB
-  return sizeInBytes > 2 * 1024 * 1024;
-}
-
-async function convertToMp3(buffer: Buffer): Promise<Buffer> {
-  console.log("Converting WAV to MP3...");
-  const startTime = Date.now();
-  const inputStream = Readable.from(buffer);
-
-  const outputBuffer = await new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    const passThrough = new PassThrough();
-    passThrough.on("data", (chunk) => chunks.push(chunk));
-
-    ffmpeg(inputStream)
-      .toFormat("mp3")
-      .audioBitrate("128k")
-      .audioChannels(1)
-      .on("error", reject)
-      .on("end", () => {
-        const finalBuffer = Buffer.concat(chunks);
-        console.log("Conversion took:", Date.now() - startTime, "ms");
-        console.log(
-          "Converted size:",
-          (finalBuffer.length / (1024 * 1024)).toFixed(2) + "MB"
-        );
-        resolve(finalBuffer);
-      })
-      .pipe(passThrough);
-  });
-
-  return outputBuffer;
+  // Only optimize files over 5MB
+  return sizeInBytes > 5 * 1024 * 1024;
 }
 
 async function transcribeAudio(
@@ -97,18 +62,7 @@ async function transcribeAudio(
 ): Promise<{ text: string; duration: number }> {
   console.log("Starting transcription...");
 
-  // Optimize the buffer if needed
-  let finalBuffer = buffer;
-  let finalContentType = contentType;
-
-  if (shouldOptimizeBuffer(contentType, buffer.length)) {
-    console.log("Converting to more efficient format...");
-    if (contentType === "audio/wav") {
-      finalContentType = "audio/mp3";
-      finalBuffer = await convertToMp3(buffer);
-    }
-  }
-
+  // Send the buffer directly to Deepgram
   const deepgramParams = new URLSearchParams({
     model: "nova-2",
     smart_format: "true",
@@ -126,9 +80,9 @@ async function transcribeAudio(
       method: "POST",
       headers: {
         Authorization: `Token ${DEEPGRAM_API_KEY}`,
-        "Content-Type": finalContentType,
+        "Content-Type": contentType,
       },
-      body: finalBuffer,
+      body: buffer,
     }
   );
 
