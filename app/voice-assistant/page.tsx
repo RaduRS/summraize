@@ -296,8 +296,6 @@ export default function VoiceAssistant() {
       const formData = new FormData();
       formData.append("audio", audioBlob, "audio.webm");
       formData.append("duration", audioDuration.toString());
-      // Add OpenAI service parameter
-      formData.append("service", "openai");
 
       const response2 = await fetch("/api/process-audio", {
         method: "POST",
@@ -332,10 +330,10 @@ export default function VoiceAssistant() {
       });
       creditsEvent.emit();
 
-      // Show toast with credits deducted and service used
+      // Show toast with credits deducted
       toast({
         title: "Operation Complete",
-        description: `${data2.creditsDeducted} credits were deducted from your account. Used ${data2.service} for transcription.`,
+        description: `${data2.creditsDeducted} credits were deducted from your account`,
       });
     } catch (err: any) {
       console.error("Error processing audio:", err);

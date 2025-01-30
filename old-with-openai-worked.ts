@@ -3,9 +3,14 @@ import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
 
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 if (!DEEPGRAM_API_KEY) {
   throw new Error("DEEPGRAM_API_KEY is not configured");
+}
+
+if (!OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY is not configured");
 }
 
 export const config = {
@@ -27,6 +32,9 @@ const AUDIO_TYPES = {
 
 // Maximum file size (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+// Transcription service options
+type TranscriptionService = "deepgram" | "openai";
 
 // Helper function to detect actual file type from buffer
 function detectFileType(buffer: Buffer): string | null {
@@ -58,24 +66,58 @@ function shouldOptimizeBuffer(fileType: string, sizeInBytes: number): boolean {
   return sizeInBytes > 2 * 1024 * 1024;
 }
 
-async function transcribeAudio(
+async function transcribeWithOpenAI(
+  buffer: Buffer,
+  contentType: string
+): Promise<string> {
+  console.log("Starting OpenAI transcription...");
+  const formData = new FormData();
+
+  // Convert buffer to blob with correct mime type
+  const blob = new Blob([buffer], { type: contentType });
+
+  // For WAV files, we'll convert to a more efficient format
+  let finalBlob = blob;
+  if (contentType === "audio/wav") {
+    console.log("Converting WAV to more efficient format...");
+    finalBlob = new Blob([buffer], { type: "audio/mp3" });
+  }
+
+  formData.append(
+    "file",
+    finalBlob,
+    `audio.${AUDIO_TYPES[contentType as keyof typeof AUDIO_TYPES]}`
+  );
+  formData.append("model", "whisper-1");
+  formData.append("response_format", "json");
+
+  const startTime = Date.now();
+  const response = await fetch(
+    "https://api.openai.com/v1/audio/transcriptions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI API error: ${error}`);
+  }
+
+  const data = await response.json();
+  console.log("OpenAI API call took:", Date.now() - startTime, "ms");
+  return data.text;
+}
+
+async function transcribeWithDeepgram(
   buffer: Buffer,
   contentType: string
 ): Promise<{ text: string; duration: number }> {
-  console.log("Starting transcription...");
-
-  // Optimize the buffer if needed
-  let finalBuffer = buffer;
-  let finalContentType = contentType;
-
-  if (shouldOptimizeBuffer(contentType, buffer.length)) {
-    console.log("Converting to more efficient format...");
-    if (contentType === "audio/wav") {
-      finalContentType = "audio/mp3";
-      finalBuffer = buffer; // In real implementation, you'd convert the buffer here
-    }
-  }
-
+  console.log("Starting Deepgram transcription...");
   const deepgramParams = new URLSearchParams({
     model: "nova-2",
     smart_format: "true",
@@ -86,26 +128,24 @@ async function transcribeAudio(
     numerals: "false",
   });
 
-  const startTime = Date.now();
   const response = await fetch(
     "https://api.deepgram.com/v1/listen?" + deepgramParams.toString(),
     {
       method: "POST",
       headers: {
         Authorization: `Token ${DEEPGRAM_API_KEY}`,
-        "Content-Type": finalContentType,
+        "Content-Type": contentType,
       },
-      body: finalBuffer,
+      body: buffer,
     }
   );
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Transcription error: ${error}`);
+    throw new Error(`Deepgram API error: ${error}`);
   }
 
   const data = await response.json();
-  console.log("API call took:", Date.now() - startTime, "ms");
   const text = data.results?.channels[0]?.alternatives[0]?.transcript || "";
   const duration = Math.ceil(data.metadata?.duration || 0);
 
@@ -117,6 +157,8 @@ export async function POST(request: Request) {
     console.log("Starting audio processing...");
     const formData = await request.formData();
     const file = formData.get("audio");
+    const service =
+      (formData.get("service") as TranscriptionService) || "deepgram";
 
     if (!file || !(file instanceof File)) {
       console.error("Invalid file:", file);
@@ -138,6 +180,7 @@ export async function POST(request: Request) {
       actualType: actualFileType,
       size: file.size,
       sizeInMB: (file.size / (1024 * 1024)).toFixed(2) + "MB",
+      service: service,
     });
 
     // Use actual file type if detected, otherwise fall back to declared type
@@ -187,10 +230,12 @@ export async function POST(request: Request) {
     const fileName = `${user.id}/audio-${Date.now()}.${extension}`;
 
     // Start all async operations in parallel
-    const [{ text: transcription, duration }, uploadResult, { data: credits }] =
+    const [transcriptionResult, uploadResult, { data: credits }] =
       await Promise.all([
         // Transcription
-        transcribeAudio(buffer, contentType),
+        service === "openai"
+          ? transcribeWithOpenAI(buffer, contentType)
+          : transcribeWithDeepgram(buffer, contentType),
 
         // File upload
         supabase.storage.from("audio_recordings").upload(fileName, file, {
@@ -202,8 +247,21 @@ export async function POST(request: Request) {
         creditCheckPromise,
       ]);
 
+    // Extract transcription and duration
+    let transcription: string;
+    let duration: number;
+
+    if (service === "openai") {
+      transcription = transcriptionResult as string;
+      duration = Math.ceil(buffer.length / (16000 * 2)); // Rough estimate for 16kHz mono audio
+    } else {
+      const result = transcriptionResult as { text: string; duration: number };
+      transcription = result.text;
+      duration = result.duration;
+    }
+
     // Format transcription (moved after parallel operations)
-    const formattedTranscription = transcription
+    transcription = transcription
       .replace(
         /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
         ".\n\n$1 "
@@ -258,7 +316,8 @@ export async function POST(request: Request) {
         supabase.from("audio_recordings").insert({
           user_id: user.id,
           file_path: uploadResult.data?.path || "",
-          transcription: formattedTranscription,
+          transcription: transcription,
+          service: service,
         }),
       ]);
 
@@ -275,10 +334,11 @@ export async function POST(request: Request) {
     console.log("Total processing time:", processingTime, "ms");
 
     return NextResponse.json({
-      text: formattedTranscription,
+      text: transcription,
       audioUrl: urlData?.signedUrl,
       creditsDeducted: credits.credits - (updatedCredits?.credits || 0),
       processingTime,
+      service,
     });
   } catch (error: unknown) {
     console.error("Process audio error:", error);
