@@ -1,11 +1,12 @@
 "use client";
 
 import { motion, useInView } from "framer-motion";
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 import { AuthButton } from "./auth-button";
 import Link from "next/link";
 import { ArrowRight, FileText, Mic, Speaker } from "lucide-react";
 import { useRef } from "react";
+import { cn } from "@/lib/utils";
 
 export default function Hero() {
   const heroRef = useRef(null);
@@ -70,49 +71,55 @@ export default function Hero() {
             ref={featuresRef}
             className="mt-16 sm:mt-20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 max-w-7xl mx-auto px-4"
           >
-            {[
-              {
-                icon: Mic,
-                title: "Speech to Text",
-                description:
-                  "Convert any audio to accurate text with professional-grade precision",
-              },
-              {
-                icon: FileText,
-                title: "Document Summary",
-                description:
-                  "Get concise summaries of reports, papers, and documents",
-              },
-              {
-                icon: Speaker,
-                title: "AI Voice Synthesis",
-                description:
-                  "Transform text into natural-sounding speech for any content",
-              },
-            ].map((feature, index) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={
-                  areFeaturesInView
-                    ? { opacity: 1, y: 0 }
-                    : { opacity: 0, y: 20 }
-                }
-                transition={{
-                  duration: 0.5,
-                  delay: areFeaturesInView ? index * 0.1 : 0,
-                }}
-                className="flex flex-col items-center p-6 bg-white/50 dark:bg-gray-800/50 rounded-2xl shadow-sm hover:shadow-md transition-shadow"
-              >
-                <feature.icon className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-                <h3 className="mt-4 text-lg font-semibold text-center">
-                  {feature.title}
-                </h3>
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
-                  {feature.description}
-                </p>
-              </motion.div>
-            ))}
+            <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+              {[
+                {
+                  icon: Mic,
+                  title: "Speech to Text",
+                  description:
+                    "Convert any audio to accurate text with professional-grade precision",
+                },
+                {
+                  icon: FileText,
+                  title: "Document Summary",
+                  description:
+                    "Get concise summaries of reports, papers, and documents",
+                },
+                {
+                  icon: Speaker,
+                  title: "AI Voice Synthesis",
+                  description:
+                    "Transform text into natural-sounding speech for any content",
+                },
+              ].map((feature, index) => (
+                <motion.div
+                  key={feature.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={
+                    areFeaturesInView
+                      ? { opacity: 1, y: 0 }
+                      : { opacity: 0, y: 20 }
+                  }
+                  transition={{
+                    duration: 0.5,
+                    delay: areFeaturesInView ? index * 0.1 : 0,
+                  }}
+                  className={cn(
+                    "flex flex-col items-center p-6 bg-white/50 dark:bg-gray-800/50 rounded-2xl shadow-sm hover:shadow-md transition-shadow",
+                    index === 2 &&
+                      "sm:col-span-2 lg:col-span-1 sm:max-w-md sm:mx-auto sm:w-full"
+                  )}
+                >
+                  <feature.icon className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+                  <h3 className="mt-4 text-lg font-semibold text-center">
+                    {feature.title}
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-center">
+                    {feature.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

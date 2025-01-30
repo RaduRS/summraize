@@ -5,6 +5,7 @@ import { Footer } from "@/components/footer";
 import { cn } from "@/lib/utils";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import { Metadata } from "next";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -12,8 +13,8 @@ const geistSans = Geist({
   variable: "--font-geist",
 });
 
-export const metadata = {
-  title: "Summraize",
+export const metadata: Metadata = {
+  title: "summraize - Transform your content with AI power",
   description: "Your AI-powered voice assistant and document converter.",
 };
 

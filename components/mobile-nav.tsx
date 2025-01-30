@@ -13,16 +13,8 @@ import { useAuth } from "@/hooks/use-auth";
 export function MobileNav() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Don't render anything while checking auth state
-  if (isLoading) return null;
-
-  // When not authenticated, show auth buttons directly (not in dropdown)
-  if (!isAuthenticated) {
-    return (
-      <div className="md:hidden">
-        <HeaderAuth isMobile />
-      </div>
-    );
+  if (!isAuthenticated || isLoading) {
+    return null;
   }
 
   // When authenticated, show dropdown with credits and sign out

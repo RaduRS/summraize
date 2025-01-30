@@ -19,7 +19,10 @@ export default function TermsOfService() {
                 By accessing and using{" "}
                 <span className="font-bold">
                   summr
-                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                    ai
+                  </span>
+                  ze
                 </span>
                 , you agree to be bound by these Terms of Service and all
                 applicable laws and regulations. If you do not agree with any of
@@ -34,7 +37,10 @@ export default function TermsOfService() {
               <p className="text-sm sm:text-base">
                 <span className="font-bold">
                   summr
-                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                    ai
+                  </span>
+                  ze
                 </span>{" "}
                 provides AI-powered services including:
               </p>
@@ -148,7 +154,10 @@ export default function TermsOfService() {
               <p className="text-sm sm:text-base">
                 <span className="font-bold">
                   summr
-                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                    ai
+                  </span>
+                  ze
                 </span>{" "}
                 is provided "as is" without warranties of any kind. We are not
                 liable for any damages arising from the use of our service.
@@ -176,7 +185,9 @@ export default function TermsOfService() {
                 For questions about these Terms of Service, please contact us at{" "}
                 <span className="font-bold">
                   support@summr
-                  <span className="text-blue-500 dark:text-blue-400">ai</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                    ai
+                  </span>
                   ze.com
                 </span>
               </p>

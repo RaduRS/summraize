@@ -46,7 +46,13 @@ export default function Home() {
             transition={{ duration: 0.5 }}
             className="text-center mb-12"
           >
-            <h2 className="text-3xl font-bold mb-4">Why Choose summraize?</h2>
+            <h2 className="text-3xl font-bold mb-4">
+              Why Choose summr
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                ai
+              </span>
+              ze?
+            </h2>
             <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               Experience the future of content transformation with our powerful{" "}
               <span className="text-blue-600 dark:text-blue-400">AI</span> tools

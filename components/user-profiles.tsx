@@ -95,7 +95,11 @@ export function UserProfiles() {
       <div className="relative w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12 sm:mb-16">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Who Uses summraize?
+            Who Uses summr
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+              ai
+            </span>
+            ze?
           </h2>
           <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto px-4">
             Our solutions help professionals work smarter and students learn
@@ -111,7 +115,7 @@ export function UserProfiles() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
             >
-              <Card className="p-6 sm:p-8 h-full hover:shadow-lg transition-shadow bg-gray-50 dark:bg-gray-800">
+              <Card className="p-6 sm:p-8 h-full flex flex-col hover:shadow-lg transition-shadow bg-gray-50 dark:bg-gray-800">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="p-3 bg-white dark:bg-gray-900 rounded-lg">
                     <profile.icon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
@@ -127,7 +131,7 @@ export function UserProfiles() {
                   {profile.description}
                 </p>
 
-                <div className="space-y-4 sm:space-y-6 mb-6">
+                <div className="space-y-4 sm:space-y-6 flex-1">
                   <div>
                     <h4 className="font-semibold mb-3 text-red-600 dark:text-red-400 flex items-center gap-2">
                       <div className="p-1 bg-red-100 dark:bg-red-900 rounded">
@@ -176,7 +180,7 @@ export function UserProfiles() {
                 <AuthButton
                   href={profile.href}
                   variant="outline"
-                  className="w-full group"
+                  className="w-full group mt-6"
                 >
                   Learn More
                   <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />

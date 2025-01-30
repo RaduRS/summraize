@@ -23,8 +23,19 @@ function HeaderAuth({ className, isMobile }: HeaderAuthProps) {
   if (!isAuthenticated) {
     return (
       <div
-        className={cn("flex gap-2", !isMobile && "hidden md:flex", className)}
+        className={cn(
+          "flex gap-4 items-center",
+          isMobile ? "flex md:hidden" : "hidden md:flex",
+          className
+        )}
       >
+        <Link
+          href="/pricing"
+          className="text-sm text-muted-foreground hover:text-foreground relative group"
+        >
+          Pricing
+          <span className="absolute left-0 -bottom-0.5 w-0 h-[1px] bg-foreground transition-all group-hover:w-full" />
+        </Link>
         <Button asChild size="sm" variant="outline">
           <Link href="/sign-in">Sign in</Link>
         </Button>
@@ -39,11 +50,11 @@ function HeaderAuth({ className, isMobile }: HeaderAuthProps) {
     <div
       className={cn(
         "flex items-center gap-4",
-        !isMobile && "hidden md:flex",
+        isMobile ? "flex md:hidden" : "hidden md:flex",
         className
       )}
     >
-      <CreditsDisplay />
+      {!isMobile && <CreditsDisplay />}
       <Button variant="ghost" onClick={signOut} className="gap-2">
         <LogOut className="h-4 w-4" />
         Sign Out

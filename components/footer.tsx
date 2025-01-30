@@ -40,7 +40,10 @@ export function Footer() {
                 © {currentYear}{" "}
                 <span className="font-bold">
                   summr
-                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                    ai
+                  </span>
+                  ze
                 </span>
                 . All rights reserved.
               </p>
@@ -77,7 +80,9 @@ export function Footer() {
                 <p className="text-xs text-muted-foreground max-w-xs">
                   <span className="font-bold">
                     summr
-                    <span className="text-blue-500 dark:text-blue-400">ai</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                      ai
+                    </span>
                     ze
                   </span>{" "}
                   converts speech and documents to text, summarizes content, and

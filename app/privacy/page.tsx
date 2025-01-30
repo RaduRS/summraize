@@ -17,7 +17,8 @@ export default function PrivacyPolicy() {
                 Welcome to{" "}
                 <span className="font-bold">
                   summr
-                  <span className="text-blue-500 dark:text-blue-400">ai</span>ze
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">ai</span>
+                  ze
                 </span>
                 . This Privacy Policy explains how we collect, use, disclose,
                 and safeguard your information when you use our service.
@@ -109,7 +110,7 @@ export default function PrivacyPolicy() {
                 contact us at{" "}
                 <span className="font-bold">
                   support@summr
-                  <span className="text-blue-500 dark:text-blue-400">ai</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">ai</span>
                   ze.com
                 </span>
               </p>
