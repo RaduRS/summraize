@@ -4,6 +4,9 @@ import { checkTotalTTSUsage, updateTotalTTSUsage } from "@/utils/voice-tiers";
 import { getGoogleTTS } from "@/utils/google-tts";
 import { estimateCosts } from "@/utils/cost-calculator";
 
+export const maxDuration = 30;
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try {
     const { text } = await request.json();
@@ -58,8 +61,12 @@ export async function POST(request: Request) {
     const { selectedTier, usage } = await checkTotalTTSUsage(request);
 
     try {
+      console.log("Starting TTS generation for text length:", text.length);
+
       // Use Google TTS for all tiers
       const audioContent = await getGoogleTTS(text, selectedTier.voiceId);
+
+      console.log("Audio generated successfully, uploading to storage...");
 
       // Upload to Supabase Storage
       const fileName = `${user.id}/tts-${Date.now().toString()}.mp3`;
@@ -70,6 +77,7 @@ export async function POST(request: Request) {
         });
 
       if (uploadError) {
+        console.error("Upload error:", uploadError);
         throw new Error("Failed to upload audio");
       }
 
@@ -107,13 +115,22 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       console.error("TTS Error:", error);
+      // Check if it's a timeout error
+      if (
+        error instanceof Error &&
+        error.message.includes("deadline exceeded")
+      ) {
+        return NextResponse.json(
+          { error: "TTS generation timed out. Please try with shorter text." },
+          { status: 504 }
+        );
+      }
       throw error;
     }
   } catch (error) {
     console.error("Route Error:", error);
-    return NextResponse.json(
-      { error: "Failed to generate speech" },
-      { status: 500 }
-    );
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to generate speech";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
