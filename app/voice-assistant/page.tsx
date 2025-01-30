@@ -152,6 +152,165 @@ export default function VoiceAssistant() {
     }
   };
 
+  const compressAudio = async (audioBlob: Blob): Promise<Blob> => {
+    console.log("Starting audio compression...");
+    console.log(
+      "Original size:",
+      (audioBlob.size / (1024 * 1024)).toFixed(2) + "MB"
+    );
+
+    try {
+      const audioContext = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Create offline context for rendering
+      const offlineCtx = new OfflineAudioContext(
+        1, // mono
+        audioBuffer.length * (16000 / audioBuffer.sampleRate), // target 16kHz
+        16000 // target sample rate
+      );
+
+      // Create buffer source
+      const source = offlineCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(offlineCtx.destination);
+      source.start();
+
+      // Render audio
+      const renderedBuffer = await offlineCtx.startRendering();
+
+      // Convert to WAV
+      const length = renderedBuffer.length * 2; // 16-bit samples
+      const outputBuffer = new ArrayBuffer(44 + length);
+      const view = new DataView(outputBuffer);
+      const writeString = (offset: number, string: string) => {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i));
+        }
+      };
+
+      // WAV header
+      writeString(0, "RIFF");
+      view.setUint32(4, 36 + length, true);
+      writeString(8, "WAVE");
+      writeString(12, "fmt ");
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, 16000, true);
+      view.setUint32(28, 32000, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, "data");
+      view.setUint32(40, length, true);
+
+      // Audio data
+      const samples = new Int16Array(renderedBuffer.length);
+      const channelData = renderedBuffer.getChannelData(0);
+      for (let i = 0; i < renderedBuffer.length; i++) {
+        samples[i] =
+          channelData[i] < 0
+            ? Math.max(-32768, Math.floor(channelData[i] * 32768))
+            : Math.min(32767, Math.floor(channelData[i] * 32767));
+      }
+      new Uint8Array(outputBuffer, 44).set(new Uint8Array(samples.buffer));
+
+      const compressedBlob = new Blob([outputBuffer], { type: "audio/wav" });
+      console.log(
+        "Compressed size:",
+        (compressedBlob.size / (1024 * 1024)).toFixed(2) + "MB"
+      );
+      return compressedBlob;
+    } catch (error) {
+      console.error("Compression error:", error);
+      return audioBlob; // Return original if compression fails
+    }
+  };
+
+  const handleAudioReady = async (blob: Blob) => {
+    console.log("Audio ready with type:", blob.type);
+    setIsProcessing(true);
+
+    try {
+      // For iOS compatibility, if the blob is not in a supported format, convert it
+      let finalBlob = blob;
+      if (
+        blob.type === "audio/webm" &&
+        !MediaRecorder.isTypeSupported("audio/webm")
+      ) {
+        finalBlob = new Blob([blob], { type: "audio/mp4" });
+      }
+
+      // Compress large audio files
+      if (blob.size > 2 * 1024 * 1024) {
+        // Compress files larger than 2MB
+        console.log("File is large, compressing...");
+        finalBlob = await compressAudio(finalBlob);
+      }
+
+      // Set duration using the recording time as it's more reliable for recordings
+      if (recordingTime > 0) {
+        setAudioDuration(recordingTime);
+        setFinalDuration(recordingTime);
+      } else {
+        // For uploaded files, try to get the duration
+        const audio = new Audio();
+        const url = URL.createObjectURL(finalBlob);
+
+        try {
+          await new Promise((resolve) => {
+            const handleLoad = () => {
+              audio.removeEventListener("loadedmetadata", handleLoad);
+              audio.removeEventListener("error", handleError);
+              resolve(null);
+            };
+
+            const handleError = () => {
+              audio.removeEventListener("loadedmetadata", handleLoad);
+              audio.removeEventListener("error", handleError);
+              console.log(
+                "Could not load audio metadata, using default duration"
+              );
+              resolve(null);
+            };
+
+            audio.addEventListener("loadedmetadata", handleLoad);
+            audio.addEventListener("error", handleError);
+            audio.src = url;
+          });
+
+          if (
+            audio.duration &&
+            !isNaN(audio.duration) &&
+            isFinite(audio.duration)
+          ) {
+            setAudioDuration(Math.ceil(audio.duration));
+            setFinalDuration(Math.ceil(audio.duration));
+          }
+        } catch (error) {
+          console.error("Error getting audio duration:", error);
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      setAudioBlob(finalBlob);
+      setResult(null);
+      setTtsAudioUrl(null);
+    } catch (error) {
+      console.error("Error processing audio:", error);
+      toast({
+        title: "Processing Error",
+        description: "Failed to process audio file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const processAudio = async (audioBlob: Blob) => {
     setIsProcessing(true);
     try {
@@ -198,69 +357,6 @@ export default function VoiceAssistant() {
 
     // Use the same flow as recording
     handleAudioReady(file);
-  };
-
-  const handleAudioReady = async (blob: Blob) => {
-    console.log("Audio ready with type:", blob.type);
-
-    // For iOS compatibility, if the blob is not in a supported format, convert it
-    let finalBlob = blob;
-    if (
-      blob.type === "audio/webm" &&
-      !MediaRecorder.isTypeSupported("audio/webm")
-    ) {
-      finalBlob = new Blob([blob], { type: "audio/mp4" });
-    }
-
-    // Set duration using the recording time as it's more reliable for recordings
-    if (recordingTime > 0) {
-      setAudioDuration(recordingTime);
-      setFinalDuration(recordingTime);
-    } else {
-      // For uploaded files, try to get the duration
-      const audio = new Audio();
-      const url = URL.createObjectURL(finalBlob);
-
-      try {
-        await new Promise((resolve) => {
-          const handleLoad = () => {
-            audio.removeEventListener("loadedmetadata", handleLoad);
-            audio.removeEventListener("error", handleError);
-            resolve(null);
-          };
-
-          const handleError = () => {
-            audio.removeEventListener("loadedmetadata", handleLoad);
-            audio.removeEventListener("error", handleError);
-            console.log(
-              "Could not load audio metadata, using default duration"
-            );
-            resolve(null);
-          };
-
-          audio.addEventListener("loadedmetadata", handleLoad);
-          audio.addEventListener("error", handleError);
-          audio.src = url;
-        });
-
-        if (
-          audio.duration &&
-          !isNaN(audio.duration) &&
-          isFinite(audio.duration)
-        ) {
-          setAudioDuration(audio.duration);
-          setFinalDuration(audio.duration);
-        }
-      } catch (error) {
-        console.error("Error loading audio:", error);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    }
-
-    setAudioBlob(finalBlob);
-    setResult(null);
-    setTtsAudioUrl(null);
   };
 
   const transcribe = async () => {
