@@ -12,7 +12,7 @@ export const config = {
   api: {
     bodyParser: false,
   },
-  maxDuration: 300,
+  maxDuration: 60,
 };
 
 export async function POST(request: Request) {

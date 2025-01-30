@@ -5,7 +5,7 @@ import { Readable } from "stream";
 import { PassThrough } from "stream";
 import { SUPPORTED_FORMATS, AudioFormat } from "@/constants/audio";
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

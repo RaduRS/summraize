@@ -3,7 +3,8 @@ import { createClient } from "@/utils/supabase/server";
 import pdf from "pdf-parse-fork";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// Vercel hobby plan has a 60 second limit for serverless functions
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
