@@ -23,7 +23,7 @@ export default function Home() {
     <div className="flex flex-col">
       {/* Hero Section */}
       <div className="relative">
-        <BackgroundDecorations variant="gradient" />
+        <BackgroundDecorations variant="clean" />
         <Hero />
       </div>
 
@@ -35,7 +35,7 @@ export default function Home() {
 
       {/* Benefits Section - Subtle gray background */}
       <section className="w-full relative py-20 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm">
-        <BackgroundDecorations />
+        <BackgroundDecorations variant="gradient-left" />
         <div className="relative w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             ref={benefitsRef}
@@ -112,13 +112,13 @@ export default function Home() {
 
       {/* User Profiles - White background with dots */}
       <section className="w-full relative bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-        <BackgroundDecorations variant="dots" />
+        <BackgroundDecorations variant="clean" />
         <UserProfiles />
       </section>
 
       {/* Testimonials - Light gray background with gradient */}
       <section className="w-full relative bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-sm">
-        <BackgroundDecorations variant="gradient" />
+        <BackgroundDecorations variant="gradient-right" />
         <Testimonials />
       </section>
 
