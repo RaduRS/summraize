@@ -13,7 +13,7 @@ export function Nav() {
       <div className="w-full max-w-7xl mx-auto flex justify-between items-center p-3 px-5 text-sm h-16">
         <div className="flex gap-5 items-center">
           <div className="flex items-center gap-2">
-            <MobileNav />
+            {/* <MobileNav /> */}
             <Logo />
           </div>
           <div className="hidden md:block">
@@ -21,9 +21,8 @@ export function Nav() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <MobileNavTabs />
+          {/* <MobileNavTabs /> */}
           <div className="hidden md:flex items-center gap-4">
-            <CreditsDisplay />
             <HeaderAuth />
           </div>
         </div>

@@ -1,8 +1,8 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "./ui/button";
 import { Mic, FileText } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
+import { useAuth } from "@/hooks/use-auth";
 
 export function MobileNavTabs() {
   const router = useRouter();

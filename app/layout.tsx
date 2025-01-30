@@ -1,6 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "next-themes";
-import { Providers } from "@/components/providers";
 import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
 import { cn } from "@/lib/utils";
@@ -37,14 +36,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Providers>
-            <div className="relative flex min-h-screen flex-col">
-              <Nav />
-              <main className="flex-1 mt-16">{children}</main>
-              <Footer />
-            </div>
-            <Toaster />
-          </Providers>
+          <div className="relative flex min-h-screen flex-col">
+            <Nav />
+            <main className="flex-1 mt-16">{children}</main>
+            <Footer />
+          </div>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

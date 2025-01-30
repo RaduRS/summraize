@@ -1,13 +1,22 @@
+"use client";
+
 import { createClient } from "@/utils/supabase/client";
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { User } from "@supabase/supabase-js";
+
+// Protected pages that require authentication
+const PROTECTED_PATHS = ["/voice-assistant", "/document-converter"];
+// Auth pages that should redirect to voice-assistant if already authenticated
+const AUTH_PATHS = ["/sign-in", "/sign-up"];
 
 export function useAuth() {
-  console.log("🎯 useAuth hook called");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
+  const pathname = usePathname();
 
   const checkSession = useCallback(async () => {
     try {
@@ -15,95 +24,102 @@ export function useAuth() {
         data: { session },
         error,
       } = await supabase.auth.getSession();
-      console.log("📡 useAuth - getSession response:", {
-        hasSession: !!session,
-        user: session?.user?.email,
-        error: error?.message,
-        timestamp: new Date().toISOString(),
-      });
 
       if (error) {
-        console.error("❌ useAuth - Session error:", error);
+        console.error("Auth session error:", error);
         setIsAuthenticated(false);
+        setUser(null);
         setIsLoading(false);
+
+        if (PROTECTED_PATHS.includes(pathname)) {
+          router.replace("/sign-in");
+        }
         return;
       }
 
       const hasSession = !!session;
-      console.log("🔐 useAuth - Setting authenticated state:", {
-        hasSession,
-        timestamp: new Date().toISOString(),
-      });
       setIsAuthenticated(hasSession);
+      setUser(session?.user ?? null);
       setIsLoading(false);
-    } catch (e) {
-      console.error("💥 useAuth - Unexpected error:", e);
+
+      // Handle routing based on auth state
+      if (!hasSession && PROTECTED_PATHS.includes(pathname)) {
+        router.replace("/sign-in");
+      } else if (hasSession && AUTH_PATHS.includes(pathname)) {
+        router.replace("/voice-assistant");
+      }
+    } catch (error) {
+      console.error("Auth check error:", error);
       setIsAuthenticated(false);
+      setUser(null);
       setIsLoading(false);
+
+      if (PROTECTED_PATHS.includes(pathname)) {
+        router.replace("/sign-in");
+      }
     }
-  }, [supabase]);
+  }, [supabase, router, pathname]);
 
   const signOut = useCallback(async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("❌ useAuth - Sign out error:", error);
-        return;
+      if (PROTECTED_PATHS.includes(pathname)) {
+        await router.replace("/");
       }
-      console.log("✅ useAuth - Sign out successful");
-      // State update will be handled by the auth state change listener
-    } catch (e) {
-      console.error("💥 useAuth - Sign out error:", e);
+      setIsAuthenticated(false);
+      setUser(null);
+      await supabase.auth.signOut();
+      router.refresh();
+    } catch (error) {
+      console.error("Sign out error:", error);
     }
-  }, [supabase]);
+  }, [supabase, router, pathname]);
 
   useEffect(() => {
-    console.log("🔄 useAuth: Setting up auth listener");
     let mounted = true;
-
-    // Check session immediately
-    console.log("🔍 useAuth: Checking initial session");
     checkSession();
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      console.log("🔔 useAuth - Auth state change:", {
-        event,
-        hasSession: !!session,
-        user: session?.user?.email,
-        timestamp: new Date().toISOString(),
-      });
-
       const hasSession = !!session;
       setIsAuthenticated(hasSession);
+      setUser(session?.user ?? null);
       setIsLoading(false);
 
-      // Handle navigation based on auth state
       if (event === "SIGNED_OUT") {
+        if (PROTECTED_PATHS.includes(pathname)) {
+          await router.replace("/");
+        }
         router.refresh();
-        router.push("/");
       } else if (event === "SIGNED_IN") {
         router.refresh();
-        router.push("/voice-assistant");
+        if (!PROTECTED_PATHS.includes(pathname)) {
+          await router.replace("/voice-assistant");
+        }
       }
     });
 
     return () => {
-      console.log("🧹 useAuth: Cleaning up auth listener");
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase, router, checkSession]);
+  }, [supabase, router, checkSession, pathname]);
 
-  console.log("📊 useAuth state:", {
-    isAuthenticated,
-    isLoading,
-    timestamp: new Date().toISOString(),
-  });
+  useEffect(() => {
+    if (!isLoading) {
+      checkSession();
+    }
+  }, [pathname, checkSession, isLoading]);
 
-  return { isAuthenticated, isLoading, signOut };
+  return useMemo(
+    () => ({
+      isAuthenticated,
+      isLoading,
+      user,
+      signOut,
+    }),
+    [isAuthenticated, isLoading, user, signOut]
+  );
 }

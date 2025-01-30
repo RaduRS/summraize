@@ -8,8 +8,6 @@ import {
   FileText,
   Image,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef } from "react";
@@ -98,7 +96,7 @@ export default function PricingPage() {
 
   return (
     <div className="w-full relative">
-      <BackgroundDecorations variant="gradient" />
+      <BackgroundDecorations variant="gradient-left" />
       <div className="max-w-7xl mx-auto p-4 py-12 sm:py-20">
         <motion.div
           ref={headerRef}

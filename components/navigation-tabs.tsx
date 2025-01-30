@@ -1,9 +1,9 @@
 "use client";
 
-import { useAuth } from "@/hooks/use-auth";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 interface NavigationTabsProps extends React.HTMLAttributes<HTMLDivElement> {}
 
