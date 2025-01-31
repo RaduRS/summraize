@@ -9,10 +9,30 @@ if (!DEEPGRAM_API_KEY) {
   throw new Error("DEEPGRAM_API_KEY is not configured");
 }
 
+interface DeepgramWord {
+  word: string;
+  start: number;
+  end: number;
+  confidence: number;
+  punctuated_word: string;
+}
+
+interface StreamResponse {
+  transcript: string;
+  words: DeepgramWord[];
+  is_final: boolean;
+  speech_final: boolean;
+  paragraph_final?: boolean;
+  creditsDeducted?: number;
+}
+
 export async function POST(request: Request) {
+  const encoder = new TextEncoder();
+
   try {
     const formData = await request.formData();
     const audioFile = formData.get("audio") as File;
+    const duration = formData.get("duration") as string;
 
     if (!audioFile) {
       return NextResponse.json(
@@ -21,7 +41,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the current user with proper cookie handling
+    // Get the current user
     const supabase = await createClient(request);
     const {
       data: { user },
@@ -29,107 +49,104 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.error("Auth error:", authError);
       return NextResponse.json(
-        { error: "Authentication error" },
+        { error: "Authentication required" },
         { status: 401 }
       );
     }
 
-    // Convert the file to a buffer
-    const buffer = Buffer.from(await audioFile.arrayBuffer());
-
-    // Send the buffer directly to Deepgram
-    const deepgramParams = new URLSearchParams({
-      model: "nova-2",
-      smart_format: "true",
-      punctuate: "true",
-      paragraphs: "true",
-      diarize: "false",
-      utterances: "false",
-      numerals: "false",
-    });
-
-    const response = await fetch(
-      "https://api.deepgram.com/v1/listen?" + deepgramParams.toString(),
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Token ${DEEPGRAM_API_KEY}`,
-          "Content-Type": audioFile.type || "audio/wav",
-        },
-        body: buffer,
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("Deepgram error:", error);
-      return NextResponse.json(
-        { error: "Failed to process audio" },
-        { status: 500 }
-      );
-    }
-
-    const data = await response.json();
-    const text = data.results?.channels[0]?.alternatives[0]?.transcript || "";
-    const duration = Math.ceil(data.metadata?.duration || 0);
-    const words = data.results?.channels[0]?.alternatives[0]?.words || [];
-
-    // Calculate costs and check credits
-    const costs = estimateCosts({ audioLength: duration });
-
-    // Check user credits
+    // Calculate and check credits early
+    const costs = estimateCosts({ audioLength: parseFloat(duration) });
     const { data: credits } = await supabase
       .from("user_credits")
       .select("credits")
       .eq("user_id", user.id)
       .single();
 
-    if (!credits || credits.credits < costs.total) {
+    if (!credits || credits.credits < costs.transcription) {
       return NextResponse.json(
         {
           error: "Insufficient credits",
-          required: costs.total,
+          required: costs.transcription,
           available: credits?.credits || 0,
         },
         { status: 402 }
       );
     }
 
-    // Update credits
-    const { data: updatedCredits, error: updateError } = await supabase
-      .from("user_credits")
-      .update({ credits: credits.credits - costs.total })
-      .eq("user_id", user.id)
-      .select("credits")
-      .single();
-
-    if (updateError) {
-      console.error("Credits update error:", updateError);
-      throw new Error("Failed to update credits");
-    }
-
-    // Create a streaming response
-    const creditsDeducted = credits.credits - (updatedCredits?.credits || 0);
+    // Create a ReadableStream for the response
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          // Convert File to ArrayBuffer
+          const buffer = await audioFile.arrayBuffer();
+
+          // Configure Deepgram with Nova 2 model
+          const deepgramParams = new URLSearchParams({
+            model: "nova-2",
+            smart_format: "true",
+            punctuate: "true",
+            diarize: "false",
+            utterances: "false",
+            numerals: "false",
+            paragraphs: "true",
+          });
+
+          const response = await fetch(
+            "https://api.deepgram.com/v1/listen?" + deepgramParams.toString(),
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Token ${DEEPGRAM_API_KEY}`,
+                "Content-Type": audioFile.type || "audio/webm",
+              },
+              body: buffer,
+            }
+          );
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Deepgram API error: ${errorText}`);
+          }
+
+          const data = await response.json();
+          const words = data.results?.channels[0]?.alternatives[0]?.words || [];
+
           // Send words one by one with a small delay
-          for (const word of words) {
-            const wordData = {
+          for (let i = 0; i < words.length; i++) {
+            const word = words[i] as DeepgramWord;
+
+            // Check if this word ends a paragraph by looking at punctuation
+            const isParagraphEnd =
+              word.punctuated_word?.endsWith(".") ||
+              word.punctuated_word?.endsWith("!") ||
+              word.punctuated_word?.endsWith("?");
+
+            const wordData: StreamResponse = {
               transcript: word.punctuated_word || word.word,
               words: [word],
               is_final: true,
-              speech_final: word === words[words.length - 1], // Only true for last word
+              speech_final: i === words.length - 1,
+              paragraph_final: isParagraphEnd,
               creditsDeducted:
-                word === words[words.length - 1] ? creditsDeducted : undefined, // Only send with last word
+                i === words.length - 1 ? costs.transcription : undefined,
             };
 
-            controller.enqueue(`data: ${JSON.stringify(wordData)}\n\n`);
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(wordData)}\n\n`)
+            );
+
             // Add a small delay between words to simulate real-time
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            if (i !== words.length - 1) {
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            }
           }
+
+          // Update credits after successful transcription
+          await supabase
+            .from("user_credits")
+            .update({ credits: credits.credits - costs.transcription })
+            .eq("user_id", user.id);
 
           controller.close();
         } catch (error) {
@@ -139,20 +156,18 @@ export async function POST(request: Request) {
       },
     });
 
-    return new Response(stream, {
+    // Return the stream response
+    return new NextResponse(stream, {
       headers: {
         "Content-Type": "text/event-stream",
-        Connection: "keep-alive",
         "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       },
     });
-  } catch (error: unknown) {
-    console.error("Process audio error:", error);
+  } catch (error) {
+    console.error("Stream transcribe error:", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to process audio",
-      },
+      { error: "Failed to process audio" },
       { status: 500 }
     );
   }
