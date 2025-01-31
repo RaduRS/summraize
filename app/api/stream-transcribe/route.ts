@@ -3,6 +3,10 @@ import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
 import fetch from "cross-fetch";
 
+export const runtime = "edge";
+export const preferredRegion = "auto";
+export const dynamic = "force-dynamic";
+
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 
 if (!DEEPGRAM_API_KEY) {
@@ -41,7 +45,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the current user
+    // Get the current user using edge-compatible Supabase client
     const supabase = await createClient(request);
     const {
       data: { user },
@@ -57,11 +61,18 @@ export async function POST(request: Request) {
 
     // Calculate and check credits early
     const costs = estimateCosts({ audioLength: parseFloat(duration) });
-    const { data: credits } = await supabase
+    const { data: credits, error: creditsError } = await supabase
       .from("user_credits")
       .select("credits")
       .eq("user_id", user.id)
       .single();
+
+    if (creditsError) {
+      return NextResponse.json(
+        { error: "Failed to check credits" },
+        { status: 500 }
+      );
+    }
 
     if (!credits || credits.credits < costs.transcription) {
       return NextResponse.json(
@@ -78,7 +89,7 @@ export async function POST(request: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Convert File to ArrayBuffer
+          // Get original audio buffer
           const buffer = await audioFile.arrayBuffer();
 
           // Configure Deepgram with Nova 2 model
@@ -98,7 +109,7 @@ export async function POST(request: Request) {
               method: "POST",
               headers: {
                 Authorization: `Token ${DEEPGRAM_API_KEY}`,
-                "Content-Type": audioFile.type || "audio/webm",
+                "Content-Type": "audio/wav",
               },
               body: buffer,
             }
@@ -143,10 +154,14 @@ export async function POST(request: Request) {
           }
 
           // Update credits after successful transcription
-          await supabase
+          const { error: updateError } = await supabase
             .from("user_credits")
             .update({ credits: credits.credits - costs.transcription })
             .eq("user_id", user.id);
+
+          if (updateError) {
+            console.error("Failed to update credits:", updateError);
+          }
 
           controller.close();
         } catch (error) {
