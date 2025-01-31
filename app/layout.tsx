@@ -7,6 +7,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import { Metadata } from "next";
 import GoogleAnalytics from "@/components/google-analytics";
+import CookieConsent from "@/components/cookie-consent";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -46,6 +47,7 @@ export default function RootLayout({
           </div>
           <Toaster />
         </ThemeProvider>
+        <CookieConsent />
       </body>
     </html>
   );

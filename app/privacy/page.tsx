@@ -17,7 +17,9 @@ export default function PrivacyPolicy() {
                 Welcome to{" "}
                 <span className="font-bold">
                   summr
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">ai</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                    ai
+                  </span>
                   ze
                 </span>
                 . This Privacy Policy explains how we collect, use, disclose,
@@ -47,6 +49,41 @@ export default function PrivacyPolicy() {
                 <li>Device information (device type, operating system)</li>
                 <li>Performance data and error reports</li>
               </ul>
+
+              <h3 className="text-lg sm:text-xl font-medium mb-2 mt-4">
+                2.3 Cookies and Tracking Technologies
+              </h3>
+              <p className="text-sm sm:text-base mb-4">
+                We use cookies and similar tracking technologies to track
+                activity on our service and hold certain information. Cookies
+                are files with a small amount of data that may include an
+                anonymous unique identifier.
+              </p>
+              <h4 className="text-md sm:text-lg font-medium mb-2">
+                Types of Cookies We Use:
+              </h4>
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
+                <li>
+                  <span className="font-medium">Essential Cookies:</span>{" "}
+                  Required for the website to function properly. These cannot be
+                  disabled.
+                </li>
+                <li>
+                  <span className="font-medium">Analytics Cookies:</span> Used
+                  by Google Analytics to understand how visitors interact with
+                  our website, helping us improve our services.
+                </li>
+                <li>
+                  <span className="font-medium">Preference Cookies:</span> Used
+                  to remember your preferences and settings.
+                </li>
+              </ul>
+              <p className="text-sm sm:text-base mt-4">
+                You can instruct your browser to refuse all cookies or to
+                indicate when a cookie is being sent. However, if you do not
+                accept cookies, you may not be able to use some portions of our
+                service.
+              </p>
             </section>
 
             <section>
@@ -110,7 +147,9 @@ export default function PrivacyPolicy() {
                 contact us at{" "}
                 <span className="font-bold">
                   support@summr
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">ai</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                    ai
+                  </span>
                   ze.com
                 </span>
               </p>
