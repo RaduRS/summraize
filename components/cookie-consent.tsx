@@ -54,10 +54,10 @@ export default function CookieConsent() {
           </div>
           <div className="flex items-center gap-3 justify-start">
             <Button variant="default" size="sm" onClick={acceptCookies}>
-              Accept all
+              Accept
             </Button>
             <Button variant="outline" size="sm" onClick={rejectCookies}>
-              Reject all
+              Reject
             </Button>
           </div>
         </div>
