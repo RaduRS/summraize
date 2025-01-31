@@ -13,11 +13,20 @@ import { useToast } from "@/hooks/use-toast";
 import { downloadAudio } from "@/utils/audio-helpers";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface ProcessingResult {
   transcription: string;
   audioUrl: string;
   summary?: string;
+}
+
+interface Word {
+  word: string;
+  start: number;
+  end: number;
+  confidence: number;
+  punctuated_word: string;
 }
 
 export default function VoiceAssistant() {
@@ -48,6 +57,20 @@ export default function VoiceAssistant() {
   } | null>(null);
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const [partialTranscript, setPartialTranscript] = useState<string>("");
+  const wsRef = useRef<WebSocket | null>(null);
+  const processorRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [words, setWords] = useState<Word[]>([]);
+
+  const cleanTextForTTS = (text: string) => {
+    return text
+      .replace(/\n+/g, " ") // Remove line breaks
+      .replace(/\s+/g, " ") // Normalize spaces
+      .replace(/[^\S\n]+/g, " ") // Remove extra whitespace
+      .trim();
+  };
 
   const MAX_RECORDING_TIME = 60; // 1 minute max
 
@@ -65,14 +88,58 @@ export default function VoiceAssistant() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Use more iOS-compatible options
+
+      // Initialize WebSocket connection
+      wsRef.current = new WebSocket(
+        `wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1`,
+        ["token", process.env.DEEPGRAM_API_KEY as string]
+      );
+
+      // Create audio context and processor
+      audioContextRef.current = new AudioContext();
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      const processor = audioContextRef.current.createScriptProcessor(
+        2048,
+        1,
+        1
+      );
+      processorRef.current = source;
+
+      // Connect audio nodes
+      source.connect(processor);
+      processor.connect(audioContextRef.current.destination);
+
+      // Handle audio processing
+      processor.onaudioprocess = (e) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          // Get audio data
+          const inputData = e.inputBuffer.getChannelData(0);
+          // Convert to 16-bit PCM
+          const pcmData = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            pcmData[i] = Math.min(1, inputData[i]) * 0x7fff;
+          }
+          // Send audio data
+          wsRef.current.send(pcmData.buffer);
+        }
+      };
+
+      // Handle WebSocket messages
+      wsRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.channel?.alternatives?.[0]?.transcript) {
+          setPartialTranscript(
+            (prev) => prev + " " + data.channel.alternatives[0].transcript
+          );
+        }
+      };
+
+      // Use more iOS-compatible options for recording
       const options = {
         mimeType: "audio/webm;codecs=opus",
       };
 
-      // Check if the browser supports WebM
       if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        // Fallback for iOS
         options.mimeType = "audio/mp4";
       }
 
@@ -113,10 +180,25 @@ export default function VoiceAssistant() {
 
   const stopRecording = async () => {
     if (mediaRecorderRef.current && isRecording) {
+      // Clean up WebSocket and audio processing
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (processorRef.current) {
+        processorRef.current.disconnect();
+        processorRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+
       // Clear the recording timer
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
+
       // Save the final recording time
       setFinalDuration(recordingTime);
       setAudioDuration(recordingTime);
@@ -127,28 +209,19 @@ export default function VoiceAssistant() {
         .forEach((track) => track.stop());
       setIsRecording(false);
 
-      // Wait for the ondataavailable event to complete
-      await new Promise<void>((resolve) => {
-        if (!mediaRecorderRef.current) return resolve();
-
-        mediaRecorderRef.current.onstop = async () => {
-          // Use the same MIME type as used when starting the recording
-          const audioBlob = new Blob(chunksRef.current, {
-            type: mediaRecorderRef.current?.mimeType || "audio/mp4",
-          });
-          console.log("Recording stopped, blob type:", audioBlob.type);
-
-          // Now update the UI with the processed audio
-          setAudioBlob(audioBlob);
-          setResult(null);
-          setTtsAudioUrl(null);
-
-          // Set duration using the recording time as it's more reliable
-          setAudioDuration(recordingTime);
-          setFinalDuration(recordingTime);
-          resolve();
-        };
-      });
+      // Store the final transcript and reset partial
+      if (partialTranscript) {
+        setResult({
+          transcription: partialTranscript.trim(),
+          audioUrl: URL.createObjectURL(
+            new Blob(chunksRef.current, {
+              type: mediaRecorderRef.current?.mimeType || "audio/mp4",
+            })
+          ),
+        });
+        setPartialTranscript("");
+        setIsTranscribing(false);
+      }
     }
   };
 
@@ -156,7 +229,9 @@ export default function VoiceAssistant() {
     console.log("Starting audio compression...");
     console.log(
       "Original size:",
-      (audioBlob.size / (1024 * 1024)).toFixed(2) + "MB"
+      (audioBlob.size / (1024 * 1024)).toFixed(2) + "MB",
+      "Type:",
+      audioBlob.type
     );
 
     try {
@@ -165,24 +240,60 @@ export default function VoiceAssistant() {
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
+      // Calculate target sample rate based on original duration
+      const duration = audioBuffer.duration;
+      let targetSampleRate = 22050; // Better quality default (half of 44.1kHz)
+
+      // For longer audio, reduce quality slightly
+      if (duration > 30) {
+        targetSampleRate = 16000; // Still good for speech
+      }
+
       // Create offline context for rendering
       const offlineCtx = new OfflineAudioContext(
         1, // mono
-        audioBuffer.length * (16000 / audioBuffer.sampleRate), // target 16kHz
-        16000 // target sample rate
+        Math.ceil(
+          audioBuffer.length * (targetSampleRate / audioBuffer.sampleRate)
+        ),
+        targetSampleRate
       );
 
       // Create buffer source
       const source = offlineCtx.createBufferSource();
       source.buffer = audioBuffer;
-      source.connect(offlineCtx.destination);
+
+      // Add compression chain
+      const compressor = offlineCtx.createDynamicsCompressor();
+      compressor.threshold.value = -24; // Less aggressive compression
+      compressor.knee.value = 30;
+      compressor.ratio.value = 12; // More natural compression
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.25;
+
+      // Add a high-shelf filter to preserve some high frequencies
+      const highShelf = offlineCtx.createBiquadFilter();
+      highShelf.type = "highshelf";
+      highShelf.frequency.value = 4000;
+      highShelf.gain.value = 3; // Boost high frequencies slightly
+
+      // Add low-pass filter with higher cutoff
+      const lowpass = offlineCtx.createBiquadFilter();
+      lowpass.type = "lowpass";
+      lowpass.frequency.value = targetSampleRate * 0.75; // Allow more high frequencies
+      lowpass.Q.value = 0.7; // Gentler slope
+
+      // Connect nodes
+      source.connect(compressor);
+      compressor.connect(highShelf);
+      highShelf.connect(lowpass);
+      lowpass.connect(offlineCtx.destination);
       source.start();
 
       // Render audio
       const renderedBuffer = await offlineCtx.startRendering();
 
-      // Convert to WAV
-      const length = renderedBuffer.length * 2; // 16-bit samples
+      // Convert to WAV with better quality settings
+      const length = renderedBuffer.length * 2;
       const outputBuffer = new ArrayBuffer(44 + length);
       const view = new DataView(outputBuffer);
       const writeString = (offset: number, string: string) => {
@@ -199,28 +310,71 @@ export default function VoiceAssistant() {
       view.setUint32(16, 16, true);
       view.setUint16(20, 1, true);
       view.setUint16(22, 1, true);
-      view.setUint32(24, 16000, true);
-      view.setUint32(28, 32000, true);
+      view.setUint32(24, targetSampleRate, true);
+      view.setUint32(28, targetSampleRate * 2, true);
       view.setUint16(32, 2, true);
       view.setUint16(34, 16, true);
       writeString(36, "data");
       view.setUint32(40, length, true);
 
-      // Audio data
+      // Audio data with enhanced quality
       const samples = new Int16Array(renderedBuffer.length);
       const channelData = renderedBuffer.getChannelData(0);
+
+      // Find peak amplitude for normalization
+      let peak = 0;
       for (let i = 0; i < renderedBuffer.length; i++) {
-        samples[i] =
-          channelData[i] < 0
-            ? Math.max(-32768, Math.floor(channelData[i] * 32768))
-            : Math.min(32767, Math.floor(channelData[i] * 32767));
+        peak = Math.max(peak, Math.abs(channelData[i]));
       }
+
+      // Apply normalization with headroom
+      const normalizeScale = peak > 0 ? 0.95 / peak : 1;
+      for (let i = 0; i < renderedBuffer.length; i++) {
+        let sample = channelData[i] * normalizeScale;
+
+        // Gentler soft knee compression
+        const threshold = 0.75;
+        if (Math.abs(sample) > threshold) {
+          const excess = Math.abs(sample) - threshold;
+          const compression = excess * 0.3; // Only compress the excess by 30%
+          sample = Math.sign(sample) * (threshold + excess - compression);
+        }
+
+        samples[i] = Math.max(
+          -32768,
+          Math.min(32767, Math.floor(sample * 32767))
+        );
+      }
+
       new Uint8Array(outputBuffer, 44).set(new Uint8Array(samples.buffer));
 
       const compressedBlob = new Blob([outputBuffer], { type: "audio/wav" });
+
+      // Only use compressed version if it's actually smaller
+      if (compressedBlob.size >= audioBlob.size) {
+        console.log(
+          "Compression did not reduce file size, keeping original.",
+          "\nOriginal size:",
+          (audioBlob.size / (1024 * 1024)).toFixed(2) + "MB",
+          "\nAttempted compressed size:",
+          (compressedBlob.size / (1024 * 1024)).toFixed(2) + "MB"
+        );
+        return audioBlob;
+      }
+
+      const compressionRatio = (audioBlob.size / compressedBlob.size).toFixed(
+        2
+      );
       console.log(
-        "Compressed size:",
-        (compressedBlob.size / (1024 * 1024)).toFixed(2) + "MB"
+        "Compression successful:",
+        "\nOriginal size:",
+        (audioBlob.size / (1024 * 1024)).toFixed(2) + "MB",
+        "\nCompressed size:",
+        (compressedBlob.size / (1024 * 1024)).toFixed(2) + "MB",
+        "\nCompression ratio:",
+        compressionRatio + "x",
+        "\nSample rate:",
+        targetSampleRate + "Hz"
       );
       return compressedBlob;
     } catch (error) {
@@ -232,6 +386,9 @@ export default function VoiceAssistant() {
   const handleAudioReady = async (blob: Blob) => {
     console.log("Audio ready with type:", blob.type);
     setIsProcessing(true);
+    setPartialTranscript("");
+    setResult(null);
+    setIsTranscribing(true);
 
     try {
       // For iOS compatibility, if the blob is not in a supported format, convert it
@@ -243,61 +400,64 @@ export default function VoiceAssistant() {
         finalBlob = new Blob([blob], { type: "audio/mp4" });
       }
 
-      // Compress large audio files
-      if (blob.size > 2 * 1024 * 1024) {
-        // Compress files larger than 2MB
-        console.log("File is large, compressing...");
-        finalBlob = await compressAudio(finalBlob);
-      }
+      // Initialize WebSocket connection
+      wsRef.current = new WebSocket(
+        `wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1`,
+        ["token", process.env.DEEPGRAM_API_KEY as string]
+      );
 
-      // Set duration using the recording time as it's more reliable for recordings
+      // Create audio context and processor
+      audioContextRef.current = new AudioContext();
+      const arrayBuffer = await finalBlob.arrayBuffer();
+      const audioBuffer =
+        await audioContextRef.current.decodeAudioData(arrayBuffer);
+
+      // Handle WebSocket messages
+      wsRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.channel?.alternatives?.[0]?.transcript) {
+          setPartialTranscript(
+            (prev) => prev + " " + data.channel.alternatives[0].transcript
+          );
+        }
+      };
+
+      // Once WebSocket is open, start sending audio data
+      wsRef.current.onopen = async () => {
+        const chunkSize = 2048;
+        const audioData = audioBuffer.getChannelData(0);
+
+        // Convert and send audio data in chunks
+        for (let i = 0; i < audioData.length; i += chunkSize) {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            const chunk = audioData.slice(i, i + chunkSize);
+            const pcmData = new Int16Array(chunk.length);
+            for (let j = 0; j < chunk.length; j++) {
+              pcmData[j] = Math.min(1, chunk[j]) * 0x7fff;
+            }
+            wsRef.current.send(pcmData.buffer);
+
+            // Add a small delay to prevent overwhelming the WebSocket
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+        }
+
+        // Close WebSocket after sending all data
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.close();
+        }
+      };
+
+      // Set audio duration
       if (recordingTime > 0) {
         setAudioDuration(recordingTime);
         setFinalDuration(recordingTime);
       } else {
-        // For uploaded files, try to get the duration
-        const audio = new Audio();
-        const url = URL.createObjectURL(finalBlob);
-
-        try {
-          await new Promise((resolve) => {
-            const handleLoad = () => {
-              audio.removeEventListener("loadedmetadata", handleLoad);
-              audio.removeEventListener("error", handleError);
-              resolve(null);
-            };
-
-            const handleError = () => {
-              audio.removeEventListener("loadedmetadata", handleLoad);
-              audio.removeEventListener("error", handleError);
-              console.log(
-                "Could not load audio metadata, using default duration"
-              );
-              resolve(null);
-            };
-
-            audio.addEventListener("loadedmetadata", handleLoad);
-            audio.addEventListener("error", handleError);
-            audio.src = url;
-          });
-
-          if (
-            audio.duration &&
-            !isNaN(audio.duration) &&
-            isFinite(audio.duration)
-          ) {
-            setAudioDuration(Math.ceil(audio.duration));
-            setFinalDuration(Math.ceil(audio.duration));
-          }
-        } catch (error) {
-          console.error("Error getting audio duration:", error);
-        } finally {
-          URL.revokeObjectURL(url);
-        }
+        setAudioDuration(Math.ceil(audioBuffer.duration));
+        setFinalDuration(Math.ceil(audioBuffer.duration));
       }
 
       setAudioBlob(finalBlob);
-      setResult(null);
       setTtsAudioUrl(null);
     } catch (error) {
       console.error("Error processing audio:", error);
@@ -345,7 +505,7 @@ export default function VoiceAssistant() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > 30 * 1024 * 1024) {
       alert("File size must be less than 10MB");
       return;
     }
@@ -359,96 +519,135 @@ export default function VoiceAssistant() {
     handleAudioReady(file);
   };
 
-  const transcribe = async () => {
-    if (!audioBlob) return;
-
-    try {
-      // Calculate total required credits first
-      const totalRequiredCredits = getRemainingCost("transcribe");
-
-      // Check if user has enough credits before starting
-      const response = await fetch("/api/check-credits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
-        credentials: "include",
-      });
-
-      const data = await response.json();
-      if (response.status === 402) {
-        setInsufficientCreditsData({
-          required: totalRequiredCredits,
-          available: data.available,
-        });
-        setShowInsufficientCreditsModal(true);
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to check credits");
-      }
-
+  const transcribeIfNeeded = async () => {
+    if (!result?.transcription) {
+      setIsTranscribing(true);
       setIsProcessing(true);
+      let transcribeCredits = 0;
       const formData = new FormData();
-      formData.append("audio", audioBlob, "audio.webm");
+      formData.append("audio", audioBlob!, "audio.webm");
       formData.append("duration", audioDuration.toString());
-
-      const response2 = await fetch("/api/process-audio", {
+      const transcribeResponse = await fetch("/api/stream-transcribe", {
         method: "POST",
         body: formData,
         credentials: "include",
       });
 
-      const data2 = await response2.json();
-      if (!response2.ok) {
-        if (response2.status === 402) {
-          setInsufficientCreditsData({
-            required: data2.required,
-            available: data2.available,
-          });
-          setShowInsufficientCreditsModal(true);
-          return;
-        }
-        if (response2.status === 401) {
-          // Handle unauthorized - redirect to sign in
-          router.push("/sign-in");
-          return;
-        }
-        throw new Error(data2.error || "Failed to process audio");
+      if (!transcribeResponse.ok) {
+        const errorData = await transcribeResponse.json();
+        throw new Error(errorData.error || "Failed to start transcription");
       }
 
-      // Create local URL for the audio blob
-      const audioUrl = URL.createObjectURL(audioBlob);
+      const reader = transcribeResponse.body?.getReader();
+      const decoder = new TextDecoder();
+      let transcriptParts: string[] = [];
 
-      setResult({
-        transcription: data2.text,
-        audioUrl: audioUrl,
-      });
-      creditsEvent.emit();
+      if (!reader) {
+        throw new Error("Failed to create stream reader");
+      }
 
-      // Show toast with credits deducted
-      toast({
-        title: "Operation Complete",
-        description: `${data2.creditsDeducted} credits were deducted from your account`,
-      });
-    } catch (err: any) {
-      console.error("Error processing audio:", err);
-      toast({
-        title: "Error",
-        description: err.message || "Error processing audio",
-        variant: "destructive",
-      });
-    } finally {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.transcript) {
+                setPartialTranscript((prev) => {
+                  const newTranscript = prev
+                    ? `${prev} ${data.transcript}`
+                    : data.transcript;
+
+                  return newTranscript
+                    .replace(
+                      /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+                      ".\n\n$1 "
+                    )
+                    .replace(
+                      /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+                      "$1$2\n\n"
+                    )
+                    .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+                    .replace(
+                      /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+                      "$1\n\n$2"
+                    )
+                    .replace(/[^\S\n]+/g, " ")
+                    .replace(/\n{3,}/g, "\n\n")
+                    .trim();
+                });
+
+                if (data.words && data.words.length > 0) {
+                  const word = data.words[0];
+                  setWords((prevWords) => {
+                    const wordKey = `${word.start}-${word.end}-${word.word}`;
+                    if (
+                      !prevWords.some(
+                        (w) => `${w.start}-${w.end}-${w.word}` === wordKey
+                      )
+                    ) {
+                      return [...prevWords, word];
+                    }
+                    return prevWords;
+                  });
+                }
+
+                if (data.is_final) {
+                  transcriptParts.push(data.transcript);
+                }
+
+                if (data.creditsDeducted) {
+                  transcribeCredits = data.creditsDeducted;
+                }
+              }
+            } catch (e) {
+              console.error("Error parsing SSE data:", e);
+            }
+          }
+        }
+      }
+
+      const finalTranscript = transcriptParts.join(" ").trim();
+      const formattedTranscript = finalTranscript
+        .replace(
+          /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+          ".\n\n$1 "
+        )
+        .replace(
+          /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+          "$1$2\n\n"
+        )
+        .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+        .replace(
+          /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+          "$1\n\n$2"
+        )
+        .replace(/[^\S\n]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+      setResult((prev) => ({
+        transcription: formattedTranscript,
+        audioUrl: URL.createObjectURL(audioBlob!),
+        summary: prev?.summary,
+      }));
+      setPartialTranscript(formattedTranscript);
+      setIsTranscribing(false);
       setIsProcessing(false);
+
+      return { text: formattedTranscript, credits: transcribeCredits };
     }
+    return { text: result.transcription, credits: 0 };
   };
 
   const generateSummary = async () => {
     try {
-      // Calculate total required credits first
       const totalRequiredCredits = getRemainingCost("summary");
-
-      // Check if user has enough credits before starting
       const response = await fetch("/api/check-credits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -474,41 +673,12 @@ export default function VoiceAssistant() {
       let totalCreditsDeducted = 0;
 
       // Step 1: Transcribe if needed
-      let transcription = result?.transcription;
+      const { text: transcription, credits: transcribeCredits } =
+        await transcribeIfNeeded();
       if (!transcription) {
-        setIsProcessing(true);
-        const formData = new FormData();
-        formData.append("audio", audioBlob!, "audio.webm");
-        const response = await fetch("/api/process-audio", {
-          method: "POST",
-          body: formData,
-          credentials: "include",
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          if (response.status === 402) {
-            setInsufficientCreditsData({
-              required: data.required,
-              available: data.available,
-            });
-            setShowInsufficientCreditsModal(true);
-            return;
-          }
-          if (response.status === 401) {
-            // Handle unauthorized - redirect to sign in
-            router.push("/sign-in");
-            return;
-          }
-          throw new Error(data.error || "Failed to process audio");
-        }
-        transcription = data.text;
-        setResult({
-          transcription: data.text,
-          audioUrl: URL.createObjectURL(audioBlob!),
-        });
-        setIsProcessing(false);
-        totalCreditsDeducted += data.creditsDeducted;
+        throw new Error("Failed to get transcription");
       }
+      totalCreditsDeducted += transcribeCredits;
 
       // Step 2: Generate summary
       const summaryResponse = await fetch("/api/summarize", {
@@ -528,36 +698,175 @@ export default function VoiceAssistant() {
           setShowInsufficientCreditsModal(true);
           return;
         }
-        if (summaryResponse.status === 401) {
-          // Handle unauthorized - redirect to sign in
-          router.push("/sign-in");
-          return;
-        }
         throw new Error(summaryData.error || "Failed to generate summary");
       }
 
       setResult((prev) =>
         prev ? { ...prev, summary: summaryData.summary } : null
       );
-      creditsEvent.emit();
       totalCreditsDeducted += summaryData.creditsDeducted;
+      creditsEvent.emit();
 
-      // Show single toast with total credits deducted
+      // Show one toast with total credits deducted
       toast({
         title: "Operation Complete",
-        description: `${totalCreditsDeducted} credits were deducted from your account`,
+        description: `${totalCreditsDeducted} credits were deducted for ${
+          transcribeCredits > 0 ? "transcription and summary" : "summary"
+        }`,
       });
-    } catch (err: any) {
-      console.error("Error generating summary:", err);
+    } catch (error: any) {
+      console.error("Error generating summary:", error);
       toast({
         title: "Error",
-        description:
-          err.message || "Error generating summary. Please try again.",
+        description: error.message || "Error generating summary",
         variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
       setIsSummaryLoading(false);
+    }
+  };
+
+  const generateSpeech = async () => {
+    try {
+      setIsTtsLoading(true);
+      let totalCreditsDeducted = 0;
+      let operations: string[] = [];
+
+      const totalRequiredCredits = getRemainingCost("speech");
+      const response = await fetch("/api/check-credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
+        credentials: "include",
+      });
+
+      const data = await response.json();
+      if (response.status === 402) {
+        setInsufficientCreditsData({
+          required: totalRequiredCredits,
+          available: data.available,
+        });
+        setShowInsufficientCreditsModal(true);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to check credits");
+      }
+
+      // Step 1: Transcribe if needed
+      const { text: transcription, credits: transcribeCredits } =
+        await transcribeIfNeeded();
+      if (!transcription) {
+        throw new Error("Failed to get transcription");
+      }
+      if (transcribeCredits > 0) {
+        totalCreditsDeducted += transcribeCredits;
+        operations.push("transcription");
+      }
+
+      // Step 2: Generate summary if needed
+      let summaryText = result?.summary;
+      if (!summaryText) {
+        setIsSummaryLoading(true);
+        const summaryResponse = await fetch("/api/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: transcription }),
+          credentials: "include",
+        });
+
+        const summaryData = await summaryResponse.json();
+        if (!summaryResponse.ok) {
+          if (summaryResponse.status === 402) {
+            setInsufficientCreditsData({
+              required: summaryData.required,
+              available: summaryData.available,
+            });
+            setShowInsufficientCreditsModal(true);
+            return;
+          }
+          throw new Error(summaryData.error || "Failed to generate summary");
+        }
+
+        summaryText = summaryData.summary;
+        setResult((prev) =>
+          prev ? { ...prev, summary: summaryData.summary } : null
+        );
+        totalCreditsDeducted += summaryData.creditsDeducted;
+        operations.push("summary");
+      }
+
+      // Step 3: Generate speech
+      if (!summaryText) {
+        throw new Error("No summary text available");
+      }
+
+      const cleanedText = cleanTextForTTS(summaryText);
+      const ttsResponse = await fetch("/api/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: cleanedText }),
+        credentials: "include",
+      });
+
+      const ttsData = await ttsResponse.json();
+      if (!ttsResponse.ok) {
+        if (ttsResponse.status === 402) {
+          setInsufficientCreditsData({
+            required: ttsData.required,
+            available: ttsData.available,
+          });
+          setShowInsufficientCreditsModal(true);
+          return;
+        }
+        throw new Error(ttsData.error || "Failed to generate speech");
+      }
+
+      // Pre-load the audio to ensure it's valid
+      try {
+        const audioResponse = await fetch(ttsData.audioUrl);
+        if (!audioResponse.ok) {
+          throw new Error("Failed to load audio file");
+        }
+        const audioBlob = await audioResponse.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setTtsAudioUrl(audioUrl);
+      } catch (error) {
+        console.error("Error loading TTS audio:", error);
+        throw new Error("Failed to load TTS audio");
+      }
+
+      totalCreditsDeducted += ttsData.creditsDeducted;
+      operations.push("speech");
+      creditsEvent.emit();
+
+      // Show one toast with total credits deducted and operations performed
+      let operationsText = operations.join(", ");
+      if (operations.length === 1) {
+        operationsText = operations[0];
+      } else if (operations.length === 2) {
+        operationsText = operations.join(" and ");
+      } else if (operations.length === 3) {
+        operationsText = `${operations[0]}, ${operations[1]} and ${operations[2]}`;
+      }
+
+      toast({
+        title: "Operation Complete",
+        description: `${totalCreditsDeducted} credits were deducted for ${operationsText}`,
+      });
+    } catch (error: any) {
+      console.error("Error in speech generation chain:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate speech",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+      setIsSummaryLoading(false);
+      setIsTtsLoading(false);
     }
   };
 
@@ -632,6 +941,51 @@ export default function VoiceAssistant() {
           return allCosts.speech - allCosts.transcribe;
         }
         return allCosts.speech;
+    }
+  };
+
+  const handleTranscribe = async () => {
+    try {
+      const totalRequiredCredits = getRemainingCost("transcribe");
+      const response = await fetch("/api/check-credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requiredCredits: totalRequiredCredits }),
+        credentials: "include",
+      });
+
+      const data = await response.json();
+      if (response.status === 402) {
+        setInsufficientCreditsData({
+          required: totalRequiredCredits,
+          available: data.available,
+        });
+        setShowInsufficientCreditsModal(true);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to check credits");
+      }
+
+      const { text: transcription, credits: transcribeCredits } =
+        await transcribeIfNeeded();
+      if (!transcription) {
+        throw new Error("Failed to get transcription");
+      }
+
+      creditsEvent.emit();
+      toast({
+        title: "Operation Complete",
+        description: `${transcribeCredits} credits were deducted for transcription`,
+      });
+    } catch (error: any) {
+      console.error("Error in transcription:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to transcribe",
+        variant: "destructive",
+      });
     }
   };
 
@@ -755,7 +1109,7 @@ export default function VoiceAssistant() {
 
             <div className="flex flex-col sm:flex-row justify-between gap-4">
               <CostButton
-                onClick={transcribe}
+                onClick={handleTranscribe}
                 disabled={
                   isProcessing ||
                   isSummaryLoading ||
@@ -789,142 +1143,7 @@ export default function VoiceAssistant() {
               </CostButton>
 
               <CostButton
-                onClick={async () => {
-                  try {
-                    // Calculate total required credits first
-                    const totalRequiredCredits = getRemainingCost("speech");
-
-                    // Check if user has enough credits before starting
-                    const response = await fetch("/api/check-credits", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        requiredCredits: totalRequiredCredits,
-                      }),
-                    });
-
-                    const data = await response.json();
-                    if (response.status === 402) {
-                      setInsufficientCreditsData({
-                        required: totalRequiredCredits,
-                        available: data.available,
-                      });
-                      setShowInsufficientCreditsModal(true);
-                      return;
-                    }
-
-                    setIsProcessing(true);
-                    let totalCreditsDeducted = 0;
-
-                    // Step 1: Transcribe if needed
-                    let transcription = result?.transcription;
-                    if (!transcription) {
-                      const formData = new FormData();
-                      formData.append("audio", audioBlob!, "audio.webm");
-                      formData.append("duration", audioDuration.toString());
-                      const response = await fetch("/api/process-audio", {
-                        method: "POST",
-                        body: formData,
-                      });
-                      const data = await response.json();
-                      if (!response.ok) {
-                        if (response.status === 402) {
-                          setInsufficientCreditsData({
-                            required: data.required,
-                            available: data.available,
-                          });
-                          setShowInsufficientCreditsModal(true);
-                          return;
-                        }
-                        throw new Error(
-                          data.error || "Failed to process audio"
-                        );
-                      }
-                      transcription = data.text;
-                      setResult({
-                        transcription: data.text,
-                        audioUrl: URL.createObjectURL(audioBlob!),
-                      });
-                      totalCreditsDeducted += data.creditsDeducted;
-                    }
-
-                    // Step 2: Generate summary if needed
-                    let summaryText = result?.summary;
-                    if (!summaryText) {
-                      setIsSummaryLoading(true);
-                      const summaryResponse = await fetch("/api/summarize", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ text: transcription }),
-                      });
-                      const summaryData = await summaryResponse.json();
-                      if (!summaryResponse.ok) {
-                        if (summaryResponse.status === 402) {
-                          setInsufficientCreditsData({
-                            required: summaryData.required,
-                            available: summaryData.available,
-                          });
-                          setShowInsufficientCreditsModal(true);
-                          return;
-                        }
-                        throw new Error(
-                          summaryData.error || "Failed to generate summary"
-                        );
-                      }
-                      summaryText = summaryData.summary;
-                      setResult((prev) =>
-                        prev ? { ...prev, summary: summaryData.summary } : null
-                      );
-                      totalCreditsDeducted += summaryData.creditsDeducted;
-                    }
-
-                    // Step 3: Generate speech
-                    setIsTtsLoading(true);
-                    const ttsResponse = await fetch("/api/text-to-speech", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        text: summaryText,
-                      }),
-                    });
-
-                    const ttsData = await ttsResponse.json();
-                    if (!ttsResponse.ok) {
-                      if (ttsResponse.status === 402) {
-                        setInsufficientCreditsData({
-                          required: ttsData.required,
-                          available: ttsData.available,
-                        });
-                        setShowInsufficientCreditsModal(true);
-                        return;
-                      }
-                      throw new Error(
-                        ttsData.error || "Failed to generate speech"
-                      );
-                    }
-                    setTtsAudioUrl(ttsData.audioUrl);
-                    totalCreditsDeducted += ttsData.creditsDeducted;
-                    creditsEvent.emit();
-
-                    // Show a single toast with total credits deducted
-                    toast({
-                      title: "Operation Complete",
-                      description: `${totalCreditsDeducted} credits were deducted from your account`,
-                    });
-                  } catch (error: any) {
-                    console.error("Error in speech generation chain:", error);
-                    toast({
-                      title: "Error",
-                      description:
-                        error.message || "An error occurred during processing",
-                      variant: "destructive",
-                    });
-                  } finally {
-                    setIsProcessing(false);
-                    setIsSummaryLoading(false);
-                    setIsTtsLoading(false);
-                  }
-                }}
+                onClick={generateSpeech}
                 disabled={
                   isProcessing ||
                   isSummaryLoading ||
@@ -939,29 +1158,114 @@ export default function VoiceAssistant() {
               </CostButton>
             </div>
 
-            {result?.transcription && (
+            {/* Show real-time transcription only when there are words or active transcription */}
+            {((isRecording || isTranscribing) &&
+              partialTranscript.trim().length > 0) ||
+            (result?.transcription && !isRecording && !isTranscribing) ? (
               <div className="space-y-2">
-                <h3 className="font-semibold">Transcription</h3>
-                <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg whitespace-pre-line leading-relaxed">
-                  {result.transcription}
+                <p className="font-semibold">Transcription</p>
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
+                  <div className="whitespace-pre-wrap">
+                    <AnimatePresence mode="popLayout">
+                      {words.length > 0 ? (
+                        <div>
+                          {partialTranscript
+                            .split("\n")
+                            .map((paragraph, pIndex) => (
+                              <div key={pIndex} className="mb-4 last:mb-0">
+                                {paragraph
+                                  .split(" ")
+                                  .filter(Boolean)
+                                  .map((word, wIndex) => (
+                                    <motion.span
+                                      key={`${pIndex}-${wIndex}-${word}`}
+                                      initial={{ opacity: 0, y: 10 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: -10 }}
+                                      transition={{
+                                        duration: 0.15,
+                                        ease: "easeOut",
+                                      }}
+                                      className="inline-block mr-1"
+                                    >
+                                      {word}
+                                    </motion.span>
+                                  ))}
+                                {/* Add cursor at the end of the last paragraph */}
+                                {(isTranscribing || isRecording) &&
+                                  pIndex ===
+                                    partialTranscript.split("\n").length -
+                                      1 && (
+                                    <motion.span
+                                      key="cursor"
+                                      initial={{ opacity: 0 }}
+                                      animate={{ opacity: [0, 1, 0] }}
+                                      transition={{
+                                        duration: 1,
+                                        repeat: Infinity,
+                                        ease: "linear",
+                                      }}
+                                      className="inline-block w-0.5 h-4 bg-muted-foreground ml-1 align-middle"
+                                    />
+                                  )}
+                              </div>
+                            ))}
+                        </div>
+                      ) : !isRecording &&
+                        !isTranscribing &&
+                        result?.transcription ? (
+                        <div>
+                          {result.transcription
+                            .split("\n")
+                            .map((paragraph, pIndex) => (
+                              <div key={pIndex} className="mb-4 last:mb-0">
+                                {paragraph}
+                              </div>
+                            ))}
+                        </div>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {result?.summary && (
               <div className="space-y-2">
                 <h3 className="font-semibold">Summary</h3>
                 <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
-                  {result.summary.split("\n\n").map((paragraph, i) => (
-                    <p key={i}>
-                      {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
-                        if (part.startsWith("*") && part.endsWith("*")) {
-                          return <strong key={j}>{part.slice(1, -1)}</strong>;
-                        }
-                        return part;
-                      })}
-                    </p>
-                  ))}
+                  <div className="whitespace-pre-wrap">
+                    {result.summary
+                      .replace(
+                        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+                        ".\n\n$1 "
+                      )
+                      .replace(
+                        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+                        "$1$2\n\n"
+                      )
+                      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+                      .replace(
+                        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+                        "$1\n\n$2"
+                      )
+                      .replace(/[^\S\n]+/g, " ")
+                      .replace(/\n{3,}/g, "\n\n")
+                      .trim()
+                      .split("\n")
+                      .map((paragraph, pIndex) => (
+                        <div key={pIndex} className="mb-4 last:mb-0">
+                          {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
+                            if (part.startsWith("*") && part.endsWith("*")) {
+                              return (
+                                <strong key={j}>{part.slice(1, -1)}</strong>
+                              );
+                            }
+                            return part;
+                          })}
+                        </div>
+                      ))}
+                  </div>
                 </div>
               </div>
             )}

@@ -50,12 +50,6 @@ function detectFileType(buffer: Buffer): string | null {
   return null;
 }
 
-// Helper function to determine if we should optimize the buffer
-function shouldOptimizeBuffer(fileType: string, sizeInBytes: number): boolean {
-  // Only optimize files over 5MB
-  return sizeInBytes > 5 * 1024 * 1024;
-}
-
 async function transcribeAudio(
   buffer: Buffer,
   contentType: string

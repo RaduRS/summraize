@@ -57,6 +57,36 @@ export default function DocumentConverter() {
     }
   }, [isAuthenticated, router]);
 
+  // Cleanup effect for object URLs
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (fullTextAudioUrl) {
+        URL.revokeObjectURL(fullTextAudioUrl);
+      }
+      if (summaryAudioUrl) {
+        URL.revokeObjectURL(summaryAudioUrl);
+      }
+    };
+  }, []);
+
+  // Effect to cleanup old URLs when new ones are created
+  useEffect(() => {
+    return () => {
+      if (fullTextAudioUrl) {
+        URL.revokeObjectURL(fullTextAudioUrl);
+      }
+    };
+  }, [fullTextAudioUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (summaryAudioUrl) {
+        URL.revokeObjectURL(summaryAudioUrl);
+      }
+    };
+  }, [summaryAudioUrl]);
+
   if (isAuthenticated === false) {
     return null;
   }
@@ -294,9 +324,29 @@ export default function DocumentConverter() {
           }
           throw new Error(summaryData.error || "Failed to generate summary");
         }
-        summaryText = summaryData.summary;
+
+        // Format the summary text with proper paragraph breaks
+        const formattedSummary = summaryData.summary
+          .replace(
+            /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+            ".\n\n$1 "
+          )
+          .replace(
+            /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+            "$1$2\n\n"
+          )
+          .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+          .replace(
+            /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+            "$1\n\n$2"
+          )
+          .replace(/[^\S\n]+/g, " ")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+
+        summaryText = formattedSummary;
         setResult((prev) =>
-          prev ? { ...prev, summary: summaryData.summary } : null
+          prev ? { ...prev, summary: formattedSummary } : null
         );
         totalCreditsDeducted += summaryData.creditsDeducted;
       }
@@ -307,8 +357,13 @@ export default function DocumentConverter() {
         throw new Error("No text available for speech generation");
       }
 
-      // Clean up text for speech by removing asterisks
-      const cleanTextForSpeech = textToSpeak.replace(/\*(.*?)\*/g, "$1");
+      // Clean up text for speech by removing asterisks and normalizing whitespace
+      const cleanTextForSpeech = textToSpeak
+        .replace(/\*(.*?)\*/g, "$1") // Remove asterisks
+        .replace(/\n+/g, " ") // Remove line breaks
+        .replace(/\s+/g, " ") // Normalize spaces
+        .replace(/[^\S\n]+/g, " ") // Remove extra whitespace
+        .trim();
 
       setIsTtsLoading(true);
       const ttsResponse = await fetch("/api/text-to-speech", {
@@ -332,11 +387,24 @@ export default function DocumentConverter() {
         throw new Error(ttsData.error || "Failed to generate speech");
       }
 
-      // Store audio URL based on mode
-      if (mode === "summary") {
-        setSummaryAudioUrl(ttsData.audioUrl);
-      } else {
-        setFullTextAudioUrl(ttsData.audioUrl);
+      // Pre-load the audio to ensure it's valid
+      try {
+        const audioResponse = await fetch(ttsData.audioUrl);
+        if (!audioResponse.ok) {
+          throw new Error("Failed to load audio file");
+        }
+        const audioBlob = await audioResponse.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        // Store audio URL based on mode
+        if (mode === "summary") {
+          setSummaryAudioUrl(audioUrl);
+        } else {
+          setFullTextAudioUrl(audioUrl);
+        }
+      } catch (error) {
+        console.error("Error loading TTS audio:", error);
+        throw new Error("Failed to load TTS audio");
       }
 
       totalCreditsDeducted += ttsData.creditsDeducted;
@@ -511,7 +579,7 @@ export default function DocumentConverter() {
                 )}
                 isLoading={isSummaryLoading && !summaryAudioUrl}
                 cost={summaryAudioUrl ? undefined : getRemainingCost("summary")}
-                className="w-full sm:w-[180px]"
+                className="w-full sm:w-[200px]"
               >
                 Generate Summary Speech
               </CostButton>
@@ -567,16 +635,18 @@ export default function DocumentConverter() {
               <div className="space-y-2">
                 <h3 className="font-semibold">Summary</h3>
                 <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
-                  {result.summary.split("\n\n").map((paragraph, i) => (
-                    <p key={i}>
-                      {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
-                        if (part.startsWith("*") && part.endsWith("*")) {
-                          return <strong key={j}>{part.slice(1, -1)}</strong>;
-                        }
-                        return part;
-                      })}
-                    </p>
-                  ))}
+                  <div className="whitespace-pre-wrap">
+                    {result.summary.split("\n").map((paragraph, i) => (
+                      <div key={i} className="mb-4 last:mb-0">
+                        {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
+                          if (part.startsWith("*") && part.endsWith("*")) {
+                            return <strong key={j}>{part.slice(1, -1)}</strong>;
+                          }
+                          return part;
+                        })}
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 {summaryAudioUrl && (
                   <div className="rounded-lg border bg-card p-4 mt-2">
