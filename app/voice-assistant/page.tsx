@@ -225,166 +225,7 @@ export default function VoiceAssistant() {
     }
   };
 
-  const compressAudio = async (audioBlob: Blob): Promise<Blob> => {
-    console.log("Starting audio compression...");
-    console.log(
-      "Original size:",
-      (audioBlob.size / (1024 * 1024)).toFixed(2) + "MB",
-      "Type:",
-      audioBlob.type
-    );
-
-    try {
-      const audioContext = new (window.AudioContext ||
-        (window as any).webkitAudioContext)();
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-      // Calculate target sample rate based on original duration
-      const duration = audioBuffer.duration;
-      let targetSampleRate = 22050; // Better quality default (half of 44.1kHz)
-
-      // For longer audio, reduce quality slightly
-      if (duration > 30) {
-        targetSampleRate = 16000; // Still good for speech
-      }
-
-      // Create offline context for rendering
-      const offlineCtx = new OfflineAudioContext(
-        1, // mono
-        Math.ceil(
-          audioBuffer.length * (targetSampleRate / audioBuffer.sampleRate)
-        ),
-        targetSampleRate
-      );
-
-      // Create buffer source
-      const source = offlineCtx.createBufferSource();
-      source.buffer = audioBuffer;
-
-      // Add compression chain
-      const compressor = offlineCtx.createDynamicsCompressor();
-      compressor.threshold.value = -24; // Less aggressive compression
-      compressor.knee.value = 30;
-      compressor.ratio.value = 12; // More natural compression
-      compressor.attack.value = 0.003;
-      compressor.release.value = 0.25;
-
-      // Add a high-shelf filter to preserve some high frequencies
-      const highShelf = offlineCtx.createBiquadFilter();
-      highShelf.type = "highshelf";
-      highShelf.frequency.value = 4000;
-      highShelf.gain.value = 3; // Boost high frequencies slightly
-
-      // Add low-pass filter with higher cutoff
-      const lowpass = offlineCtx.createBiquadFilter();
-      lowpass.type = "lowpass";
-      lowpass.frequency.value = targetSampleRate * 0.75; // Allow more high frequencies
-      lowpass.Q.value = 0.7; // Gentler slope
-
-      // Connect nodes
-      source.connect(compressor);
-      compressor.connect(highShelf);
-      highShelf.connect(lowpass);
-      lowpass.connect(offlineCtx.destination);
-      source.start();
-
-      // Render audio
-      const renderedBuffer = await offlineCtx.startRendering();
-
-      // Convert to WAV with better quality settings
-      const length = renderedBuffer.length * 2;
-      const outputBuffer = new ArrayBuffer(44 + length);
-      const view = new DataView(outputBuffer);
-      const writeString = (offset: number, string: string) => {
-        for (let i = 0; i < string.length; i++) {
-          view.setUint8(offset + i, string.charCodeAt(i));
-        }
-      };
-
-      // WAV header
-      writeString(0, "RIFF");
-      view.setUint32(4, 36 + length, true);
-      writeString(8, "WAVE");
-      writeString(12, "fmt ");
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, 1, true);
-      view.setUint32(24, targetSampleRate, true);
-      view.setUint32(28, targetSampleRate * 2, true);
-      view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true);
-      writeString(36, "data");
-      view.setUint32(40, length, true);
-
-      // Audio data with enhanced quality
-      const samples = new Int16Array(renderedBuffer.length);
-      const channelData = renderedBuffer.getChannelData(0);
-
-      // Find peak amplitude for normalization
-      let peak = 0;
-      for (let i = 0; i < renderedBuffer.length; i++) {
-        peak = Math.max(peak, Math.abs(channelData[i]));
-      }
-
-      // Apply normalization with headroom
-      const normalizeScale = peak > 0 ? 0.95 / peak : 1;
-      for (let i = 0; i < renderedBuffer.length; i++) {
-        let sample = channelData[i] * normalizeScale;
-
-        // Gentler soft knee compression
-        const threshold = 0.75;
-        if (Math.abs(sample) > threshold) {
-          const excess = Math.abs(sample) - threshold;
-          const compression = excess * 0.3; // Only compress the excess by 30%
-          sample = Math.sign(sample) * (threshold + excess - compression);
-        }
-
-        samples[i] = Math.max(
-          -32768,
-          Math.min(32767, Math.floor(sample * 32767))
-        );
-      }
-
-      new Uint8Array(outputBuffer, 44).set(new Uint8Array(samples.buffer));
-
-      const compressedBlob = new Blob([outputBuffer], { type: "audio/wav" });
-
-      // Only use compressed version if it's actually smaller
-      if (compressedBlob.size >= audioBlob.size) {
-        console.log(
-          "Compression did not reduce file size, keeping original.",
-          "\nOriginal size:",
-          (audioBlob.size / (1024 * 1024)).toFixed(2) + "MB",
-          "\nAttempted compressed size:",
-          (compressedBlob.size / (1024 * 1024)).toFixed(2) + "MB"
-        );
-        return audioBlob;
-      }
-
-      const compressionRatio = (audioBlob.size / compressedBlob.size).toFixed(
-        2
-      );
-      console.log(
-        "Compression successful:",
-        "\nOriginal size:",
-        (audioBlob.size / (1024 * 1024)).toFixed(2) + "MB",
-        "\nCompressed size:",
-        (compressedBlob.size / (1024 * 1024)).toFixed(2) + "MB",
-        "\nCompression ratio:",
-        compressionRatio + "x",
-        "\nSample rate:",
-        targetSampleRate + "Hz"
-      );
-      return compressedBlob;
-    } catch (error) {
-      console.error("Compression error:", error);
-      return audioBlob; // Return original if compression fails
-    }
-  };
-
   const handleAudioReady = async (blob: Blob) => {
-    console.log("Audio ready with type:", blob.type);
     setIsProcessing(true);
     setPartialTranscript("");
     setResult(null);
@@ -400,64 +241,50 @@ export default function VoiceAssistant() {
         finalBlob = new Blob([blob], { type: "audio/mp4" });
       }
 
-      // Initialize WebSocket connection
-      wsRef.current = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1`,
-        ["token", process.env.DEEPGRAM_API_KEY as string]
+      // Log original size
+      console.log(
+        "Original audio size:",
+        (finalBlob.size / (1024 * 1024)).toFixed(2) + " MB"
       );
 
-      // Create audio context and processor
-      audioContextRef.current = new AudioContext();
-      const arrayBuffer = await finalBlob.arrayBuffer();
-      const audioBuffer =
-        await audioContextRef.current.decodeAudioData(arrayBuffer);
-
-      // Handle WebSocket messages
-      wsRef.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.channel?.alternatives?.[0]?.transcript) {
-          setPartialTranscript(
-            (prev) => prev + " " + data.channel.alternatives[0].transcript
+      // Compress audio if larger than 1MB
+      if (finalBlob.size > 1024 * 1024) {
+        try {
+          const compressedBlob = await compressAudio(finalBlob);
+          console.log(
+            "Compressed audio size:",
+            (compressedBlob.size / (1024 * 1024)).toFixed(2) + " MB"
           );
-        }
-      };
+          console.log(
+            "Compression ratio:",
+            (finalBlob.size / compressedBlob.size).toFixed(2) + "x"
+          );
 
-      // Once WebSocket is open, start sending audio data
-      wsRef.current.onopen = async () => {
-        const chunkSize = 2048;
-        const audioData = audioBuffer.getChannelData(0);
-
-        // Convert and send audio data in chunks
-        for (let i = 0; i < audioData.length; i += chunkSize) {
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            const chunk = audioData.slice(i, i + chunkSize);
-            const pcmData = new Int16Array(chunk.length);
-            for (let j = 0; j < chunk.length; j++) {
-              pcmData[j] = Math.min(1, chunk[j]) * 0x7fff;
-            }
-            wsRef.current.send(pcmData.buffer);
-
-            // Add a small delay to prevent overwhelming the WebSocket
-            await new Promise((resolve) => setTimeout(resolve, 10));
+          // Only use compressed version if it's actually smaller
+          if (compressedBlob.size < finalBlob.size) {
+            finalBlob = compressedBlob;
+          } else {
+            console.log("Compression did not reduce file size, using original");
           }
+        } catch (error) {
+          console.error("Compression error:", error);
+          // Continue with original blob if compression fails
         }
+      }
 
-        // Close WebSocket after sending all data
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.close();
-        }
-      };
+      // Store the final blob
+      setAudioBlob(finalBlob);
 
       // Set audio duration
       if (recordingTime > 0) {
         setAudioDuration(recordingTime);
         setFinalDuration(recordingTime);
       } else {
-        setAudioDuration(Math.ceil(audioBuffer.duration));
-        setFinalDuration(Math.ceil(audioBuffer.duration));
+        const audioDuration = await getAudioDuration(finalBlob);
+        setAudioDuration(Math.ceil(audioDuration));
+        setFinalDuration(Math.ceil(audioDuration));
       }
 
-      setAudioBlob(finalBlob);
       setTtsAudioUrl(null);
     } catch (error) {
       console.error("Error processing audio:", error);
@@ -469,6 +296,136 @@ export default function VoiceAssistant() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Helper function to get audio duration
+  const getAudioDuration = (blob: Blob): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      audio.src = URL.createObjectURL(blob);
+      audio.onloadedmetadata = () => {
+        URL.revokeObjectURL(audio.src);
+        resolve(audio.duration);
+      };
+      audio.onerror = reject;
+    });
+  };
+
+  const compressAudio = async (audioBlob: Blob): Promise<Blob> => {
+    const audioContext = new (window.AudioContext ||
+      (window as any).webkitAudioContext)();
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    // Calculate target sample rate based on duration
+    const duration = audioBuffer.duration;
+    let targetSampleRate = 22050; // Better quality default (half of 44.1kHz)
+
+    // For longer audio, reduce quality slightly
+    if (duration > 30) {
+      targetSampleRate = 16000; // Still good for speech
+    }
+
+    // Create offline context for rendering
+    const offlineCtx = new OfflineAudioContext(
+      1, // mono
+      Math.ceil(
+        audioBuffer.length * (targetSampleRate / audioBuffer.sampleRate)
+      ),
+      targetSampleRate
+    );
+
+    // Create buffer source
+    const source = offlineCtx.createBufferSource();
+    source.buffer = audioBuffer;
+
+    // Add compression chain
+    const compressor = offlineCtx.createDynamicsCompressor();
+    compressor.threshold.value = -24;
+    compressor.knee.value = 30;
+    compressor.ratio.value = 12;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.25;
+
+    // Add a high-shelf filter to preserve some high frequencies
+    const highShelf = offlineCtx.createBiquadFilter();
+    highShelf.type = "highshelf";
+    highShelf.frequency.value = 4000;
+    highShelf.gain.value = 3;
+
+    // Add low-pass filter
+    const lowpass = offlineCtx.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.value = targetSampleRate * 0.75;
+    lowpass.Q.value = 0.7;
+
+    // Connect nodes
+    source.connect(compressor);
+    compressor.connect(highShelf);
+    highShelf.connect(lowpass);
+    lowpass.connect(offlineCtx.destination);
+    source.start();
+
+    // Render audio
+    const renderedBuffer = await offlineCtx.startRendering();
+
+    // Convert to WAV
+    const length = renderedBuffer.length * 2;
+    const outputBuffer = new ArrayBuffer(44 + length);
+    const view = new DataView(outputBuffer);
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    // WAV header
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + length, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, targetSampleRate, true);
+    view.setUint32(28, targetSampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, "data");
+    view.setUint32(40, length, true);
+
+    // Audio data with normalization
+    const samples = new Int16Array(renderedBuffer.length);
+    const channelData = renderedBuffer.getChannelData(0);
+
+    // Find peak for normalization
+    let peak = 0;
+    for (let i = 0; i < renderedBuffer.length; i++) {
+      peak = Math.max(peak, Math.abs(channelData[i]));
+    }
+
+    // Apply normalization with headroom
+    const normalizeScale = peak > 0 ? 0.95 / peak : 1;
+    for (let i = 0; i < renderedBuffer.length; i++) {
+      let sample = channelData[i] * normalizeScale;
+
+      // Soft knee compression
+      const threshold = 0.75;
+      if (Math.abs(sample) > threshold) {
+        const excess = Math.abs(sample) - threshold;
+        const compression = excess * 0.3;
+        sample = Math.sign(sample) * (threshold + excess - compression);
+      }
+
+      samples[i] = Math.max(
+        -32768,
+        Math.min(32767, Math.floor(sample * 32767))
+      );
+    }
+
+    new Uint8Array(outputBuffer, 44).set(new Uint8Array(samples.buffer));
+
+    return new Blob([outputBuffer], { type: "audio/wav" });
   };
 
   const processAudio = async (audioBlob: Blob) => {
