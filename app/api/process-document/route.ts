@@ -172,7 +172,6 @@ export async function POST(
           throw new Error(data.error || "Failed to process PDF");
         }
         text = formatExtractedText(data.text);
-        console.log("PDF text extracted and formatted, length:", text.length);
       } catch (error) {
         console.error("PDF processing error:", error);
         throw new Error("Failed to process PDF document");

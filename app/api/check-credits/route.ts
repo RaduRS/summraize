@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 
+export const runtime = "edge";
+export const preferredRegion = "auto";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try {
     const { requiredCredits } = await request.json();

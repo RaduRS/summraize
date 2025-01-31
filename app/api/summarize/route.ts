@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
 
+export const runtime = "edge";
+export const preferredRegion = "auto";
+export const dynamic = "force-dynamic";
+
 // Initialize Deepseek client
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL as string;
