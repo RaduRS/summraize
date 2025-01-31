@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { Metadata } from "next";
+import GoogleAnalytics from "@/components/google-analytics";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -31,6 +32,7 @@ export default function RootLayout({
           geistSans.className
         )}
       >
+        <GoogleAnalytics />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
