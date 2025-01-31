@@ -28,5 +28,5 @@ Refactor repetitive code into reusable components.
 Ensure all pages maintain a consistent design.
 Optimize SEO and performance.
 
-my website will be : summraize.io
+my website will be : summraize.com
 note - voice assistant and document converter tab component on mobile might be tricky but you will make it work

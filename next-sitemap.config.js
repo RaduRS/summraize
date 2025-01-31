@@ -1,10 +1,10 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
-  siteUrl: process.env.SITE_URL || "https://summraize.vercel.app/",
+  siteUrl: process.env.SITE_URL || "https://www.summraize.com/",
   generateRobotsTxt: true,
   generateIndexSitemap: false,
   exclude: ["/api/*", "/server-sitemap.xml"],
   robotsTxtOptions: {
-    additionalSitemaps: ["https://summraize.vercel.app/server-sitemap.xml"],
+    additionalSitemaps: ["https://www.summraize.com/server-sitemap.xml"],
   },
 };

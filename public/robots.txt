@@ -1,0 +1,10 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://www.summraize.com/
+
+# Sitemaps
+Sitemap: https://www.summraize.com/sitemap.xml
+Sitemap: https://www.summraize.com/server-sitemap.xml
