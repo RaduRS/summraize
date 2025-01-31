@@ -3,6 +3,9 @@ import { createClient } from "@/utils/supabase/server";
 import OpenAI from "openai";
 import { estimateCosts } from "@/utils/cost-calculator";
 
+export const runtime = "edge";
+export const preferredRegion = "auto";
+export const dynamic = "force-dynamic";
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -116,8 +119,6 @@ function formatExtractedText(text: string): string {
       .trim()
   );
 }
-
-export const dynamic = "force-dynamic";
 
 export async function POST(
   request: Request
