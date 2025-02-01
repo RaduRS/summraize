@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, Square, Upload, Download } from "lucide-react";
+import { Mic, Square, Upload, Download, Copy } from "lucide-react";
 import { AudioVisualizer } from "@/components/audio-visualizer";
 import { AudioPlayer } from "@/components/audio-player";
 import { CostButton } from "@/components/cost-button";
@@ -229,7 +229,6 @@ export default function VoiceAssistant() {
     setIsProcessing(true);
     setPartialTranscript("");
     setResult(null);
-    setIsTranscribing(true);
 
     try {
       // For iOS compatibility, if the blob is not in a supported format, convert it
@@ -272,8 +271,13 @@ export default function VoiceAssistant() {
         }
       }
 
-      // Store the final blob
+      // Store the final blob and create audio URL immediately
       setAudioBlob(finalBlob);
+      setResult({
+        transcription: "",
+        audioUrl: URL.createObjectURL(finalBlob),
+        summary: "",
+      });
 
       // Set audio duration
       if (recordingTime > 0) {
@@ -484,122 +488,116 @@ export default function VoiceAssistant() {
       const formData = new FormData();
       formData.append("audio", audioBlob!, "audio.webm");
       formData.append("duration", audioDuration.toString());
-      const transcribeResponse = await fetch("/api/stream-transcribe", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
 
-      if (!transcribeResponse.ok) {
-        const errorData = await transcribeResponse.json();
-        throw new Error(errorData.error || "Failed to start transcription");
-      }
+      try {
+        const transcribeResponse = await fetch("/api/stream-transcribe", {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
 
-      const reader = transcribeResponse.body?.getReader();
-      const decoder = new TextDecoder();
-      let transcriptParts: string[] = [];
+        if (!transcribeResponse.ok) {
+          const errorData = await transcribeResponse.json();
+          throw new Error(errorData.error || "Failed to start transcription");
+        }
 
-      if (!reader) {
-        throw new Error("Failed to create stream reader");
-      }
+        const reader = transcribeResponse.body?.getReader();
+        const decoder = new TextDecoder();
+        let transcriptParts: string[] = [];
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        if (!reader) {
+          throw new Error("Failed to create stream reader");
+        }
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.transcript) {
-                setPartialTranscript((prev) => {
-                  const newTranscript = prev
-                    ? `${prev} ${data.transcript}`
-                    : data.transcript;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
 
-                  return newTranscript
-                    .replace(
-                      /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
-                      ".\n\n$1 "
-                    )
-                    .replace(
-                      /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
-                      "$1$2\n\n"
-                    )
-                    .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
-                    .replace(
-                      /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
-                      "$1\n\n$2"
-                    )
-                    .replace(/[^\S\n]+/g, " ")
-                    .replace(/\n{3,}/g, "\n\n")
-                    .trim();
-                });
-
-                if (data.words && data.words.length > 0) {
-                  const word = data.words[0];
-                  setWords((prevWords) => {
-                    const wordKey = `${word.start}-${word.end}-${word.word}`;
-                    if (
-                      !prevWords.some(
-                        (w) => `${w.start}-${w.end}-${w.word}` === wordKey
-                      )
-                    ) {
-                      return [...prevWords, word];
-                    }
-                    return prevWords;
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.transcript) {
+                  setPartialTranscript((prev) => {
+                    const newTranscript = prev
+                      ? `${prev} ${data.transcript}`
+                      : data.transcript;
+                    return formatTranscript(newTranscript);
                   });
-                }
 
-                if (data.is_final) {
-                  transcriptParts.push(data.transcript);
-                }
+                  if (data.words && data.words.length > 0) {
+                    setWords((prevWords) => {
+                      const newWords = data.words.filter((word: Word) => {
+                        const wordKey = `${word.start}-${word.end}-${word.word}`;
+                        return !prevWords.some(
+                          (w) => `${w.start}-${w.end}-${w.word}` === wordKey
+                        );
+                      });
+                      return [...prevWords, ...newWords];
+                    });
+                  }
 
-                if (data.creditsDeducted) {
-                  transcribeCredits = data.creditsDeducted;
+                  if (data.is_final) {
+                    transcriptParts.push(data.transcript);
+                  }
+
+                  if (data.creditsDeducted) {
+                    transcribeCredits = data.creditsDeducted;
+                  }
                 }
+              } catch (e) {
+                console.error("Error parsing SSE data:", e);
               }
-            } catch (e) {
-              console.error("Error parsing SSE data:", e);
             }
           }
         }
+
+        const finalTranscript = formatTranscript(
+          transcriptParts.join(" ").trim()
+        );
+
+        // Update result while preserving the existing audioUrl
+        setResult((prev) => ({
+          transcription: finalTranscript,
+          audioUrl: prev?.audioUrl || "",
+          summary: prev?.summary || "",
+        }));
+
+        setPartialTranscript(finalTranscript);
+        return { text: finalTranscript, credits: transcribeCredits };
+      } catch (error) {
+        console.error("Transcription error:", error);
+        throw error;
+      } finally {
+        setIsTranscribing(false);
+        setIsProcessing(false);
       }
-
-      const finalTranscript = transcriptParts.join(" ").trim();
-      const formattedTranscript = finalTranscript
-        .replace(
-          /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
-          ".\n\n$1 "
-        )
-        .replace(
-          /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
-          "$1$2\n\n"
-        )
-        .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
-        .replace(
-          /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
-          "$1\n\n$2"
-        )
-        .replace(/[^\S\n]+/g, " ")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-
-      setResult((prev) => ({
-        transcription: formattedTranscript,
-        audioUrl: URL.createObjectURL(audioBlob!),
-        summary: prev?.summary,
-      }));
-      setPartialTranscript(formattedTranscript);
-      setIsTranscribing(false);
-      setIsProcessing(false);
-
-      return { text: formattedTranscript, credits: transcribeCredits };
     }
     return { text: result.transcription, credits: 0 };
+  };
+
+  // Helper function to format transcript
+  const formatTranscript = (text: string) => {
+    return text
+      .replace(
+        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+        ".\n\n$1 "
+      )
+      .replace(
+        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+        "$1$2\n\n"
+      )
+      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+      .replace(
+        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+        "$1\n\n$2"
+      )
+      .replace(/[^\S\n]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   };
 
   const generateSummary = async () => {
@@ -955,6 +953,14 @@ export default function VoiceAssistant() {
     };
   }, []);
 
+  const sanitizeTranscription = (text: string) => {
+    return text
+      .split("\n")
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .join("\n\n");
+  };
+
   return (
     <div className="flex flex-col items-center gap-6 sm:gap-8 p-4 sm:p-8">
       <div
@@ -1120,7 +1126,27 @@ export default function VoiceAssistant() {
               partialTranscript.trim().length > 0) ||
             (result?.transcription && !isRecording && !isTranscribing) ? (
               <div className="space-y-2">
-                <p className="font-semibold">Transcription</p>
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold">Transcription</p>
+                  {partialTranscript && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => {
+                        const sanitizedText =
+                          sanitizeTranscription(partialTranscript);
+                        navigator.clipboard.writeText(sanitizedText);
+                        toast({
+                          title: "Copied!",
+                          description: "Transcription copied to clipboard",
+                        });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
                 <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
                   <div className="whitespace-pre-wrap">
                     <AnimatePresence mode="popLayout">
@@ -1129,26 +1155,38 @@ export default function VoiceAssistant() {
                           {partialTranscript
                             .split("\n")
                             .map((paragraph, pIndex) => (
-                              <div key={pIndex} className="mb-4 last:mb-0">
+                              <motion.div
+                                key={pIndex}
+                                className="mb-4 last:mb-0 select-text"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{
+                                  duration: 0.2,
+                                  ease: "easeOut",
+                                }}
+                              >
                                 {paragraph
                                   .split(" ")
                                   .filter(Boolean)
-                                  .map((word, wIndex) => (
+                                  .map((word, wIndex, arr) => (
                                     <motion.span
                                       key={`${pIndex}-${wIndex}-${word}`}
                                       initial={{ opacity: 0, y: 10 }}
                                       animate={{ opacity: 1, y: 0 }}
                                       exit={{ opacity: 0, y: -10 }}
                                       transition={{
-                                        duration: 0.15,
+                                        duration:
+                                          audioDuration > 60 ? 0.05 : 0.15,
                                         ease: "easeOut",
                                       }}
-                                      className="inline-block mr-1"
                                     >
                                       {word}
+                                      {/* Add space after word unless it's the last word */}
+                                      {wIndex < arr.length - 1 ? " " : ""}
                                     </motion.span>
                                   ))}
-                                {/* Add cursor at the end of the last paragraph */}
+                                {/* Add cursor after the last word in the paragraph */}
                                 {(isTranscribing || isRecording) &&
                                   pIndex ===
                                     partialTranscript.split("\n").length -
@@ -1158,20 +1196,20 @@ export default function VoiceAssistant() {
                                       initial={{ opacity: 0 }}
                                       animate={{ opacity: [0, 1, 0] }}
                                       transition={{
-                                        duration: 1,
+                                        duration: audioDuration > 60 ? 0.5 : 1,
                                         repeat: Infinity,
                                         ease: "linear",
                                       }}
                                       className="inline-block w-0.5 h-4 bg-muted-foreground ml-1 align-middle"
                                     />
                                   )}
-                              </div>
+                              </motion.div>
                             ))}
                         </div>
                       ) : !isRecording &&
                         !isTranscribing &&
                         result?.transcription ? (
-                        <div>
+                        <div className="select-text">
                           {result.transcription
                             .split("\n")
                             .map((paragraph, pIndex) => (
@@ -1189,9 +1227,28 @@ export default function VoiceAssistant() {
 
             {result?.summary && (
               <div className="space-y-2">
-                <h3 className="font-semibold">Summary</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Summary</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => {
+                      const sanitizedText = sanitizeTranscription(
+                        result.summary!
+                      );
+                      navigator.clipboard.writeText(sanitizedText);
+                      toast({
+                        title: "Copied!",
+                        description: "Summary copied to clipboard",
+                      });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
                 <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
-                  <div className="whitespace-pre-wrap">
+                  <div className="whitespace-pre-wrap select-text">
                     {result.summary
                       .replace(
                         /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,

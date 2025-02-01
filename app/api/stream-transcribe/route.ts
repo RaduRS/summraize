@@ -36,7 +36,8 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const audioFile = formData.get("audio") as File;
-    const duration = formData.get("duration") as string;
+    const durationStr = formData.get("duration");
+    const duration = durationStr ? parseFloat(String(durationStr)) : 0;
 
     if (!audioFile) {
       return NextResponse.json(
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
     }
 
     // Calculate and check credits early
-    const costs = estimateCosts({ audioLength: parseFloat(duration) });
+    const costs = estimateCosts({ audioLength: duration });
     const { data: credits, error: creditsError } = await supabase
       .from("user_credits")
       .select("credits")
@@ -123,33 +124,68 @@ export async function POST(request: Request) {
           const data = await response.json();
           const words = data.results?.channels[0]?.alternatives[0]?.words || [];
 
-          // Send words one by one with a small delay
-          for (let i = 0; i < words.length; i++) {
-            const word = words[i] as DeepgramWord;
+          // Calculate delay based on duration (in milliseconds)
+          const wordDelay: number = duration > 60 ? 20 : 100; // 20ms for long audio, 100ms for short
 
-            // Check if this word ends a paragraph by looking at punctuation
-            const isParagraphEnd =
-              word.punctuated_word?.endsWith(".") ||
-              word.punctuated_word?.endsWith("!") ||
-              word.punctuated_word?.endsWith("?");
+          // Process words in batches for long audio, individually for short audio
+          if (duration > 60) {
+            // Process in batches of 5 for long audio
+            for (let i = 0; i < words.length; i += 5) {
+              const batch = words.slice(i, i + 5);
+              const isLastBatch = i + 5 >= words.length;
 
-            const wordData: StreamResponse = {
-              transcript: word.punctuated_word || word.word,
-              words: [word],
-              is_final: true,
-              speech_final: i === words.length - 1,
-              paragraph_final: isParagraphEnd,
-              creditsDeducted:
-                i === words.length - 1 ? costs.transcription : undefined,
-            };
+              // Check if the last word in batch ends a paragraph
+              const lastWord = batch[batch.length - 1] as DeepgramWord;
+              const isParagraphEnd =
+                lastWord.punctuated_word?.endsWith(".") ||
+                lastWord.punctuated_word?.endsWith("!") ||
+                lastWord.punctuated_word?.endsWith("?");
 
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(wordData)}\n\n`)
-            );
+              const batchData: StreamResponse = {
+                transcript: batch
+                  .map((w: DeepgramWord) => w.punctuated_word || w.word)
+                  .join(" "),
+                words: batch,
+                is_final: true,
+                speech_final: isLastBatch,
+                paragraph_final: isParagraphEnd,
+                creditsDeducted: isLastBatch ? costs.transcription : undefined,
+              };
 
-            // Add a small delay between words to simulate real-time
-            if (i !== words.length - 1) {
-              await new Promise((resolve) => setTimeout(resolve, 100));
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify(batchData)}\n\n`)
+              );
+
+              if (!isLastBatch) {
+                await new Promise((resolve) => setTimeout(resolve, wordDelay));
+              }
+            }
+          } else {
+            // Process words one by one for short audio
+            for (let i = 0; i < words.length; i++) {
+              const word = words[i] as DeepgramWord;
+              const isParagraphEnd =
+                word.punctuated_word?.endsWith(".") ||
+                word.punctuated_word?.endsWith("!") ||
+                word.punctuated_word?.endsWith("?");
+
+              const wordData: StreamResponse = {
+                transcript: word.punctuated_word || word.word,
+                words: [word],
+                is_final: true,
+                speech_final: i === words.length - 1,
+                paragraph_final: isParagraphEnd,
+                creditsDeducted:
+                  i === words.length - 1 ? costs.transcription : undefined,
+              };
+
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify(wordData)}\n\n`)
+              );
+
+              if (i !== words.length - 1) {
+                await new Promise((resolve) => setTimeout(resolve, wordDelay));
+              }
             }
           }
 

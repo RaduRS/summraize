@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { AudioPlayer } from "@/components/audio-player";
-import { Upload, Download } from "lucide-react";
+import { Upload, Download, Copy } from "lucide-react";
 import { CostButton } from "@/components/cost-button";
 import { creditsEvent } from "@/lib/credits-event";
 import { InsufficientCreditsModal } from "@/components/insufficient-credits-modal";
@@ -455,6 +455,15 @@ export default function DocumentConverter() {
     }
   };
 
+  // Add the sanitizeTranscription function
+  const sanitizeTranscription = (text: string) => {
+    return text
+      .split("\n")
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .join("\n\n");
+  };
+
   return (
     <div className="flex flex-col items-center gap-6 sm:gap-8 p-4 sm:p-8">
       <div
@@ -587,8 +596,25 @@ export default function DocumentConverter() {
 
             {result?.text && (
               <div className="space-y-2">
-                <h3 className="font-semibold">Document Text</h3>
-                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Document Text</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => {
+                      const sanitizedText = sanitizeTranscription(result.text);
+                      navigator.clipboard.writeText(sanitizedText);
+                      toast({
+                        title: "Copied!",
+                        description: "Document text copied to clipboard",
+                      });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0 select-text">
                   {result.text.split("\n\n").map((paragraph, i) => (
                     <p key={i}>
                       {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
