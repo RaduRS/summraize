@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, Suspense } from "react";
 import { BackgroundDecorations } from "@/components/background-decorations";
 import { AuthButton } from "@/components/auth-button";
 import { PaymentStatusModal } from "@/components/payment-status-modal";
@@ -161,7 +161,7 @@ const packages = [
   },
 ];
 
-function PricingPageContent() {
+function PricingContent() {
   const { user, refreshCredits } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -593,5 +593,15 @@ function PricingPageContent() {
 }
 
 export default function PricingPage() {
-  return <PricingPageContent />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-pulse text-lg">Loading pricing...</div>
+        </div>
+      }
+    >
+      <PricingContent />
+    </Suspense>
+  );
 }

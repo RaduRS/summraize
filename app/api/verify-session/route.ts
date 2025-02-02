@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { stripe } from "@/lib/stripe";
+import { creditsEvent } from "@/lib/credits-event";
 
 export async function GET(request: Request) {
   try {
@@ -8,41 +9,37 @@ export async function GET(request: Request) {
     const sessionId = searchParams.get("session_id");
 
     if (!sessionId) {
+      console.error("No session ID provided");
       return NextResponse.json(
-        { error: "Session ID is required" },
+        { success: false, error: "No session ID provided" },
         { status: 400 }
       );
     }
 
-    // Get the current user from Supabase
-    const supabase = await createClient(request);
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    console.log("Verifying session:", sessionId);
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
-
-    // Retrieve the session from Stripe with expanded line_items
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["line_items"],
     });
 
+    console.log("Session retrieved:", {
+      id: session.id,
+      customerId: session.customer,
+      lineItems: session.line_items?.data,
+    });
+
     if (!session) {
+      console.error("No session found");
       return NextResponse.json(
-        { error: "Invalid session ID" },
+        { success: false, error: "Invalid session" },
         { status: 400 }
       );
     }
 
     if (session.payment_status !== "paid") {
+      console.error("Payment not completed");
       return NextResponse.json(
-        { error: "Payment not completed" },
+        { success: false, error: "Payment not completed" },
         { status: 400 }
       );
     }
@@ -53,7 +50,7 @@ export async function GET(request: Request) {
     if (!priceId) {
       console.error("Price ID not found in session:", session);
       return NextResponse.json(
-        { error: "Price ID not found in session" },
+        { success: false, error: "Price ID not found in session" },
         { status: 400 }
       );
     }
@@ -78,65 +75,72 @@ export async function GET(request: Request) {
 
     if (!creditsToAdd) {
       console.error("Invalid price ID:", priceId);
-      return NextResponse.json({ error: "Invalid price ID" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid price ID" },
+        { status: 400 }
+      );
     }
+
+    const supabase = await createClient();
 
     // Get current credits from user_credits table
     const { data: userCredits, error: creditsError } = await supabase
       .from("user_credits")
       .select("credits")
-      .eq("user_id", user.id)
+      .eq("user_id", session.metadata?.userId)
       .single();
 
     if (creditsError) {
-      console.error("Credits fetch error:", creditsError);
+      console.error("Error fetching user credits:", creditsError);
       return NextResponse.json(
-        { error: "Failed to fetch user credits" },
+        { success: false, error: "Failed to fetch user credits" },
         { status: 500 }
       );
     }
+
+    console.log("Current user credits:", userCredits?.credits || 0);
 
     const currentCredits = userCredits?.credits || 0;
     const newCredits = currentCredits + creditsToAdd;
 
-    // Update credits in user_credits table
-    const { error: updateError } = await supabase
-      .from("user_credits")
-      .update({ credits: newCredits })
-      .eq("user_id", user.id);
+    console.log("Updating credits:", {
+      currentCredits,
+      creditsToAdd,
+      newCredits,
+      userId: session.metadata?.userId,
+    });
 
-    if (updateError) {
-      console.error("Credits update error:", updateError);
+    // Start a transaction
+    const { error: transactionError } = await supabase.rpc(
+      "handle_credit_purchase",
+      {
+        p_user_id: session.metadata?.userId,
+        p_credits_to_add: creditsToAdd,
+        p_stripe_session_id: session.id,
+        p_new_total_credits: newCredits,
+      }
+    );
+
+    if (transactionError) {
+      console.error("Transaction error:", transactionError);
       return NextResponse.json(
-        { error: "Failed to update credits" },
+        { success: false, error: "Failed to update credits" },
         { status: 500 }
       );
     }
 
-    // Add payment record to payments table
-    const { error: paymentError } = await supabase.from("payments").insert({
-      user_id: user.id,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      currency: session.currency?.toUpperCase(),
-      credits: creditsToAdd,
-      stripe_session_id: sessionId,
-      status: "completed",
-    });
-
-    if (paymentError) {
-      console.error("Payment record error:", paymentError);
-      // Don't return error as credits were already updated
-    }
+    // Emit the credits event to update the UI
+    creditsEvent.emit();
 
     return NextResponse.json({
       success: true,
       credits: creditsToAdd,
       total_credits: newCredits,
     });
-  } catch (error: any) {
-    console.error("Verify session error:", error);
+  } catch (error) {
+    console.error("Error verifying session:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to verify session" },
+      { success: false, error: "Failed to verify session" },
       { status: 500 }
     );
   }
