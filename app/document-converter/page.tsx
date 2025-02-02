@@ -248,6 +248,28 @@ export default function DocumentConverter() {
     }
   };
 
+  // Add the sanitizeForCopy function
+  const sanitizeForCopy = (text: string) => {
+    return text
+      .replace(/##\s+/g, "") // Remove ## headers
+      .replace(/\*([^*]+)\*/g, "$1") // Remove asterisks but keep the content
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join("\n\n");
+  };
+
+  // Add the sanitizeForTTS function
+  const sanitizeForTTS = (text: string) => {
+    return text
+      .replace(/##\s+([^.\n]+)(?!\.)(?=\n|$)/g, "## $1.") // Add period after titles if missing
+      .replace(/##\s+/g, "") // Remove ## headers but keep the added periods
+      .replace(/\*([^*]+)\*/g, "$1") // Remove asterisks but keep the content
+      .replace(/\n+/g, " ") // Replace line breaks with spaces
+      .replace(/\s+/g, " ") // Normalize spaces
+      .trim();
+  };
+
   const handleGenerateSpeech = async (mode: "full" | "summary") => {
     try {
       // Calculate total required credits first
@@ -357,13 +379,8 @@ export default function DocumentConverter() {
         throw new Error("No text available for speech generation");
       }
 
-      // Clean up text for speech by removing asterisks and normalizing whitespace
-      const cleanTextForSpeech = textToSpeak
-        .replace(/\*(.*?)\*/g, "$1") // Remove asterisks
-        .replace(/\n+/g, " ") // Remove line breaks
-        .replace(/\s+/g, " ") // Normalize spaces
-        .replace(/[^\S\n]+/g, " ") // Remove extra whitespace
-        .trim();
+      // Clean up text for speech using the new sanitizeForTTS function
+      const cleanTextForSpeech = sanitizeForTTS(textToSpeak);
 
       setIsTtsLoading(true);
       const ttsResponse = await fetch("/api/text-to-speech", {
@@ -453,15 +470,6 @@ export default function DocumentConverter() {
         }
         return fileAnalysis.summaryCost;
     }
-  };
-
-  // Add the sanitizeTranscription function
-  const sanitizeTranscription = (text: string) => {
-    return text
-      .split("\n")
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean)
-      .join("\n\n");
   };
 
   return (
@@ -603,7 +611,7 @@ export default function DocumentConverter() {
                     size="sm"
                     className="h-8 px-2"
                     onClick={() => {
-                      const sanitizedText = sanitizeTranscription(result.text);
+                      const sanitizedText = sanitizeForCopy(result.text);
                       navigator.clipboard.writeText(sanitizedText);
                       toast({
                         title: "Copied!",
@@ -615,16 +623,59 @@ export default function DocumentConverter() {
                   </Button>
                 </div>
                 <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0 select-text">
-                  {result.text.split("\n\n").map((paragraph, i) => (
-                    <p key={i}>
-                      {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
-                        if (part.startsWith("*") && part.endsWith("*")) {
-                          return <strong key={j}>{part.slice(1, -1)}</strong>;
+                  <div className="whitespace-pre-wrap">
+                    {result.text
+                      .replace(
+                        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+                        ".\n\n$1 "
+                      )
+                      .replace(
+                        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+                        "$1$2\n\n"
+                      )
+                      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+                      .replace(
+                        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+                        "$1\n\n$2"
+                      )
+                      // Ensure ## headers are on their own line
+                      .replace(/([^.\n])(##\s+[^\n]+)/g, "$1\n\n$2")
+                      .replace(/([.!?])\s*(##\s+[^\n]+)/g, "$1\n\n$2")
+                      .replace(/[^\S\n]+/g, " ")
+                      .replace(/\n{3,}/g, "\n\n")
+                      .trim()
+                      .split(/\n(?=##\s|[^#])/g) // Split on newlines, keeping ## headers with their content
+                      .map((paragraph, pIndex) => {
+                        // Check if this is a header (starts with ##)
+                        if (paragraph.trim().startsWith("## ")) {
+                          return (
+                            <h3 key={pIndex} className="font-bold text-lg mt-2">
+                              {paragraph.trim().replace("## ", "")}
+                            </h3>
+                          );
                         }
-                        return part;
+
+                        // Handle regular paragraphs with single asterisks for bold
+                        return (
+                          <div key={pIndex} className="mb-4 last:mb-0">
+                            {paragraph
+                              .trim()
+                              .split(/(\*[^*]+\*)/)
+                              .map((part, j) => {
+                                if (
+                                  part.startsWith("*") &&
+                                  part.endsWith("*")
+                                ) {
+                                  return (
+                                    <strong key={j}>{part.slice(1, -1)}</strong>
+                                  );
+                                }
+                                return part;
+                              })}
+                          </div>
+                        );
                       })}
-                    </p>
-                  ))}
+                  </div>
                 </div>
                 {fullTextAudioUrl && (
                   <div className="rounded-lg border bg-card p-4 mt-2">
@@ -659,19 +710,78 @@ export default function DocumentConverter() {
 
             {result?.summary && (
               <div className="space-y-2">
-                <h3 className="font-semibold">Summary</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Summary</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={() => {
+                      if (!result?.summary) return;
+                      const sanitizedText = sanitizeForCopy(result.summary);
+                      navigator.clipboard.writeText(sanitizedText);
+                      toast({
+                        title: "Copied!",
+                        description: "Summary copied to clipboard",
+                      });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
                 <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
-                  <div className="whitespace-pre-wrap">
-                    {result.summary.split("\n").map((paragraph, i) => (
-                      <div key={i} className="mb-4 last:mb-0">
-                        {paragraph.split(/(\*[^*]+\*)/).map((part, j) => {
-                          if (part.startsWith("*") && part.endsWith("*")) {
-                            return <strong key={j}>{part.slice(1, -1)}</strong>;
-                          }
-                          return part;
-                        })}
-                      </div>
-                    ))}
+                  <div className="whitespace-pre-wrap select-text">
+                    {result.summary
+                      .replace(
+                        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+                        ".\n\n$1 "
+                      )
+                      .replace(
+                        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+                        "$1$2\n\n"
+                      )
+                      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+                      .replace(
+                        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+                        "$1\n\n$2"
+                      )
+                      // Ensure ## headers are on their own line
+                      .replace(/([^.\n])(##\s+[^\n]+)/g, "$1\n\n$2")
+                      .replace(/([.!?])\s*(##\s+[^\n]+)/g, "$1\n\n$2")
+                      .replace(/[^\S\n]+/g, " ")
+                      .replace(/\n{3,}/g, "\n\n")
+                      .trim()
+                      .split(/\n(?=##\s|[^#])/g) // Split on newlines, keeping ## headers with their content
+                      .map((paragraph, pIndex) => {
+                        // Check if this is a header (starts with ##)
+                        if (paragraph.trim().startsWith("## ")) {
+                          return (
+                            <h3 key={pIndex} className="font-bold text-lg mt-2">
+                              {paragraph.trim().replace("## ", "")}
+                            </h3>
+                          );
+                        }
+
+                        // Handle regular paragraphs with single asterisks for bold
+                        return (
+                          <div key={pIndex} className="mb-4 last:mb-0">
+                            {paragraph
+                              .trim()
+                              .split(/(\*[^*]+\*)/)
+                              .map((part, j) => {
+                                if (
+                                  part.startsWith("*") &&
+                                  part.endsWith("*")
+                                ) {
+                                  return (
+                                    <strong key={j}>{part.slice(1, -1)}</strong>
+                                  );
+                                }
+                                return part;
+                              })}
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
                 {summaryAudioUrl && (

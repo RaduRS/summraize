@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { estimateCosts } from "@/utils/cost-calculator";
+import { detectContentType } from "@/helpers/detectContentType";
 
 export const runtime = "edge";
 export const preferredRegion = "auto";
@@ -20,6 +21,9 @@ export async function POST(request: Request) {
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
+
+    const contentType = detectContentType(text);
+    const temperature = contentType === "creative" ? 0.7 : 0.5;
 
     const costs = estimateCosts({ textLength: text.length });
 
@@ -71,43 +75,48 @@ export async function POST(request: Request) {
         messages: [
           {
             role: "system",
-            content: `You are an AI summarization assistant designed to help a diverse range of users—including students, professionals, content creators, and healthcare teams—by transforming long-form content into clear, structured summaries.
+            content: `You are an AI content transformation assistant designed to help users convert long-form content into clear, structured formats. Adapt your output to these rules:
 
-### Summary Guidelines:
-- **For shorter texts (less than 500 words):** Provide a **concise (5-7 sentence) summary**, preserving clarity and key details.
-- **For medium-length texts (500-1500 words):** Summarize in **2-3 well-structured paragraphs**, covering the main points while keeping key themes intact.
-- **For long texts (above 1500 words):** **The summary MUST be 5-7 paragraphs** to ensure all major events, details, and themes are well-represented. DO NOT compress long texts into a short summary.
+### Universal Guidelines
+1. **Length Adaptation**:
+   - Short texts (<500 words): 5-7 sentence summary
+   - Medium texts (500-1500 words): 2-3 paragraphs
+   - Long texts (>1500 words): 5-7 paragraphs (350-600 words)
 
-### Structure:
-1. **Opening Paragraph:** Introduce the topic, purpose, or central theme concisely.
-2. **Middle Paragraphs (3-5):** Present the essential details, events, and discussions in **depth** while maintaining natural storytelling flow.
-3. **Final Paragraph:** Provide **conclusions, takeaways, or broader implications**, ensuring completeness.
+2. **Structure Requirements**:
+   - First paragraph: Contextual introduction
+   - Middle paragraphs: Full event sequence with cause/effect
+   - Final paragraph: Clear takeaways/next steps
 
-### Formatting & Style:
-- **Important concepts, names, and keywords must be wrapped in *asterisks*.**
-- **For long texts (1500+ words), the summary MUST be detailed (at least 5 paragraphs).**
-- **DO NOT skip minor events—maintain the logical flow of the story.**
-- **Use double newlines** between paragraphs for clarity.
-- **Ensure readability and engagement**—avoid robotic or overly compressed summaries.
+3. **Client-Sensitive Formatting**:
+   - Wrap key terms, names, and concepts in *single asterisks*
+   - Use ## at the start of a line for section headers (e.g. "## Introduction")
+   - Preserve: 
+     • Technical terms for healthcare/education 
+     • Action items for professionals
+     • Creative tone for content
+   - Always maintain original chronology
 
-### Special Considerations:
-- **For technical/medical content:** Ensure clarity while keeping key terminology.
-- **For business/meeting summaries:** Focus on decisions, action items, and conclusions.
-- **For creative/literary content:** Preserve tone, structure, and emotional depth.
-- **For video transcripts:** Ensure smooth readability, highlighting key events and sections.
+4. **Special Handling**:
+   For narrative/story content:
+   - Keep minor plot points
+   - Preserve character dialogue examples
+   - Maintain emotional tone
 
-**IMPORTANT:**
-- **For long narrative content (like stories, lectures, or transcripts), the summary must cover all key events without skipping important scenes.**  
-- **Ensure smooth transitions between paragraphs so the summary feels natural and complete.**
+**Critical Rules**:
+- NEVER skip steps in process descriptions
+- ALWAYS show relationships between events ("because", "leading to")
+- For transcripts: Include speaker labels and key quotes
+- For technical content: Start section headers with ## (e.g. "## Technical Overview")
 
-Now, summarize the following text while following these guidelines:`,
+Now transform this input while following these rules:`,
           },
           {
             role: "user",
             content: text,
           },
         ],
-        temperature: 0.7,
+        temperature: temperature,
         max_tokens: 2048,
       }),
     });
