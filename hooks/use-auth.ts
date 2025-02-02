@@ -74,6 +74,40 @@ export function useAuth() {
     }
   }, [supabase, router, pathname]);
 
+  const refreshCredits = async () => {
+    if (!user) return;
+
+    try {
+      // Get credits from user_credits table
+      const { data: userCredits, error } = await supabase
+        .from("user_credits")
+        .select("credits")
+        .eq("user_id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Failed to refresh credits:", error);
+        return;
+      }
+
+      // Update the user state with the new credits
+      if (userCredits) {
+        setUser((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            user_metadata: {
+              ...prev.user_metadata,
+              credits: userCredits.credits,
+            },
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Error refreshing credits:", error);
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
     checkSession();
@@ -119,7 +153,8 @@ export function useAuth() {
       isLoading,
       user,
       signOut,
+      refreshCredits,
     }),
-    [isAuthenticated, isLoading, user, signOut]
+    [isAuthenticated, isLoading, user, signOut, refreshCredits]
   );
 }
