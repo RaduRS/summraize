@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { AudioPlayer } from "@/components/audio-player";
@@ -348,6 +349,7 @@ export default function DocumentConverter() {
       });
 
       const data2 = await response2.json();
+
       if (!response2.ok) {
         if (response2.status === 402) {
           setInsufficientCreditsData({
@@ -440,6 +442,7 @@ export default function DocumentConverter() {
         });
 
         const data = await response.json();
+
         if (!response.ok) {
           if (response.status === 402) {
             setInsufficientCreditsData({
@@ -790,7 +793,7 @@ export default function DocumentConverter() {
 
             {result?.text && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between w-full">
                   <h3 className="font-semibold">Document Text</h3>
                   <Button
                     variant="ghost"
@@ -808,59 +811,28 @@ export default function DocumentConverter() {
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0 select-text">
-                  <div className="whitespace-pre-wrap">
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg w-full select-text">
+                  <div className="whitespace-normal select-text">
                     {result.text
-                      .replace(
-                        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
-                        ".\n\n$1 "
-                      )
-                      .replace(
-                        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
-                        "$1$2\n\n"
-                      )
-                      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
-                      .replace(
-                        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
-                        "$1\n\n$2"
-                      )
-                      // Ensure ## headers are on their own line
-                      .replace(/([^.\n])(##\s+[^\n]+)/g, "$1\n\n$2")
-                      .replace(/([.!?])\s*(##\s+[^\n]+)/g, "$1\n\n$2")
-                      .replace(/[^\S\n]+/g, " ")
-                      .replace(/\n{3,}/g, "\n\n")
-                      .trim()
-                      .split(/\n(?=##\s|[^#])/g) // Split on newlines, keeping ## headers with their content
-                      .map((paragraph, pIndex) => {
-                        // Check if this is a header (starts with ##)
-                        if (paragraph.trim().startsWith("## ")) {
-                          return (
-                            <h3 key={pIndex} className="font-bold text-lg mt-2">
-                              {paragraph.trim().replace("## ", "")}
-                            </h3>
-                          );
-                        }
-
-                        // Handle regular paragraphs with single asterisks for bold
-                        return (
-                          <div key={pIndex} className="mb-4 last:mb-0">
-                            {paragraph
-                              .trim()
-                              .split(/(\*[^*]+\*)/)
-                              .map((part, j) => {
-                                if (
-                                  part.startsWith("*") &&
-                                  part.endsWith("*")
-                                ) {
-                                  return (
-                                    <strong key={j}>{part.slice(1, -1)}</strong>
-                                  );
-                                }
-                                return part;
-                              })}
-                          </div>
-                        );
-                      })}
+                      // Split on periods followed by newlines or multiple spaces
+                      .split(/(?<=\.)\s*\n+|\n{2,}/)
+                      .map((paragraph, i) => (
+                        <p key={i} className="mb-4 last:mb-0">
+                          {paragraph
+                            .trim()
+                            // Replace multiple spaces/newlines with a single space
+                            .replace(/\s+/g, " ")
+                            .split(/(\*[^*]+\*)/)
+                            .map((part, j) => {
+                              if (part.startsWith("*") && part.endsWith("*")) {
+                                return (
+                                  <strong key={j}>{part.slice(1, -1)}</strong>
+                                );
+                              }
+                              return part;
+                            })}
+                        </p>
+                      ))}
                   </div>
                 </div>
                 {fullTextAudioUrl && (
@@ -895,7 +867,7 @@ export default function DocumentConverter() {
 
             {result?.summary && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between w-full">
                   <h3 className="font-semibold">Summary</h3>
                   <Button
                     variant="ghost"
@@ -914,8 +886,8 @@ export default function DocumentConverter() {
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg [&>p]:mb-4 last:[&>p]:mb-0">
-                  <div className="whitespace-pre-wrap select-text">
+                <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg w-full select-text">
+                  <div className="whitespace-pre-wrap">
                     {result.summary
                       .replace(
                         /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,

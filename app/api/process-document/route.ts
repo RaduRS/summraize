@@ -93,28 +93,17 @@ async function extractTextFromImage(buffer: Buffer): Promise<string> {
   }
 }
 
+// Text formatting helper
 function formatExtractedText(text: string): string {
   return (
     text
-      // Add paragraph breaks at natural points
-      .replace(
-        /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
-        ".\n\n$1 "
-      )
-      // Add paragraph break after introductions/greetings
-      .replace(
-        /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
-        "$1$2\n\n"
-      )
-      // Add paragraph break for new speakers or dialogue
-      .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
-      .replace(
-        /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
-        "$1\n\n$2"
-      )
-      // Normalize spaces but preserve line breaks
+      // Remove leading/trailing quotes if they wrap the entire text
+      .replace(/^['"`]|['"`]$/g, "")
+      // Add space between camelCase words for readability
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      // Normalize multiple spaces while preserving line breaks and indentation
       .replace(/[^\S\n]+/g, " ")
-      // Ensure max two line breaks
+      // Remove more than 2 consecutive line breaks
       .replace(/\n{3,}/g, "\n\n")
       .trim()
   );
