@@ -2,11 +2,10 @@
 
 import { useEffect } from "react";
 import posthog from "posthog-js";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 export default function PostHogProvider() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     // Initialize PostHog
@@ -25,15 +24,12 @@ export default function PostHogProvider() {
   // Track page views
   useEffect(() => {
     if (pathname) {
-      let url = window.origin + pathname;
-      if (searchParams?.toString()) {
-        url = url + `?${searchParams.toString()}`;
-      }
+      const url = window.origin + pathname;
       posthog.capture("$pageview", {
         $current_url: url,
       });
     }
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   return null;
 }
