@@ -19,11 +19,15 @@ export default function CookieConsent() {
   const acceptCookies = () => {
     localStorage.setItem("cookieConsent", "true");
     setIsVisible(false);
+    // You might want to initialize analytics here or reload the page
+    window.location.reload();
   };
 
   const rejectCookies = () => {
     localStorage.setItem("cookieConsent", "false");
     setIsVisible(false);
+    // You might want to disable analytics here
+    window.location.reload();
   };
 
   if (!isVisible) return null;
@@ -34,9 +38,12 @@ export default function CookieConsent() {
         <div className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
+              <h3 className="font-medium mb-2">
+                🍪 Cookie and Analytics Notice
+              </h3>
               <p className="text-sm text-muted-foreground">
-                🍪 We use cookies to enhance your experience and analyze our
-                website traffic.{" "}
+                We use cookies and analytics tools to enhance your experience,
+                analyze website traffic, and improve our services.{" "}
                 <Link href="/privacy" className="underline hover:text-primary">
                   Learn more
                 </Link>
@@ -54,10 +61,10 @@ export default function CookieConsent() {
           </div>
           <div className="flex items-center gap-3 justify-start">
             <Button variant="default" size="sm" onClick={acceptCookies}>
-              Accept
+              Accept All
             </Button>
             <Button variant="outline" size="sm" onClick={rejectCookies}>
-              Reject
+              Reject Non-Essential
             </Button>
           </div>
         </div>

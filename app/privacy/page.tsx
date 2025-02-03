@@ -81,7 +81,37 @@ export default function PrivacyPolicy() {
               </p>
 
               <h3 className="text-lg sm:text-xl font-medium mb-2 mt-4">
-                2.4 Cookies and Tracking Technologies
+                2.4 Analytics and Tracking Tools
+              </h3>
+              <p className="text-sm sm:text-base mb-4">
+                We use several analytics and tracking tools to improve our
+                service and user experience:
+              </p>
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
+                <li>
+                  <span className="font-medium">Google Analytics:</span> Tracks
+                  website traffic, user behavior, and demographics to improve
+                  our service.
+                </li>
+                <li>
+                  <span className="font-medium">Hotjar:</span> Records user
+                  sessions, creates heatmaps, and collects feedback to
+                  understand how users interact with our website.
+                </li>
+                <li>
+                  <span className="font-medium">PostHog:</span> Tracks user
+                  interactions, feature usage, and conversion funnels to improve
+                  product experience.
+                </li>
+                <li>
+                  <span className="font-medium">Vercel Analytics:</span>{" "}
+                  Monitors website performance, page load times, and user
+                  experience metrics.
+                </li>
+              </ul>
+
+              <h3 className="text-lg sm:text-xl font-medium mb-2 mt-4">
+                2.5 Cookies and Tracking Technologies
               </h3>
               <p className="text-sm sm:text-base mb-4">
                 We use cookies and similar tracking technologies to track
@@ -149,9 +179,24 @@ export default function PrivacyPolicy() {
               </p>
               <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
                 <li>Audio transcription (Deepgram)</li>
-                <li>Payment processing</li>
-                <li>Analytics</li>
+                <li>Payment processing (Stripe)</li>
+                <li>
+                  Analytics and User Experience Monitoring:
+                  <ul className="list-disc pl-6 mt-2">
+                    <li>
+                      Google Analytics - Traffic analysis and user behavior
+                    </li>
+                    <li>Hotjar - Session recording and heatmaps</li>
+                    <li>PostHog - Product analytics and feature tracking</li>
+                    <li>Vercel Analytics - Performance monitoring</li>
+                  </ul>
+                </li>
               </ul>
+              <p className="text-sm sm:text-base mt-4">
+                These third-party services may collect and process your data
+                according to their own privacy policies. We recommend reviewing
+                their respective privacy policies for more information.
+              </p>
             </section>
 
             <section>
