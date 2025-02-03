@@ -773,7 +773,17 @@ export default function VoiceAssistant() {
         credentials: "include",
       });
 
-      const summaryData = await summaryResponse.json();
+      let summaryData;
+      try {
+        const rawText = await summaryResponse.text();
+        summaryData = JSON.parse(rawText);
+      } catch (parseError: any) {
+        console.error("Error parsing summary response:", parseError);
+        throw new Error(
+          `Invalid response from summary API: ${parseError.message}`
+        );
+      }
+
       if (!summaryResponse.ok) {
         if (summaryResponse.status === 402) {
           setInsufficientCreditsData({
@@ -783,7 +793,23 @@ export default function VoiceAssistant() {
           setShowInsufficientCreditsModal(true);
           return;
         }
-        throw new Error(summaryData.error || "Failed to generate summary");
+        throw new Error(
+          summaryData.error ||
+            `Failed to generate summary (${summaryResponse.status})`
+        );
+      }
+
+      if (!summaryData.summary) {
+        throw new Error("No summary returned from API");
+      }
+
+      if (summaryData.provider === "openai") {
+        toast({
+          title: "Using Backup Service",
+          description:
+            "Primary service was unavailable, using using different service instead",
+          variant: "default",
+        });
       }
 
       setResult((prev) =>
@@ -802,8 +828,11 @@ export default function VoiceAssistant() {
     } catch (error: any) {
       console.error("Error generating summary:", error);
       toast({
-        title: "Error",
-        description: error.message || "Error generating summary",
+        title: "Summary Generation Failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred",
         variant: "destructive",
       });
     } finally {

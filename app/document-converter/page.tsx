@@ -11,6 +11,14 @@ import { useToast } from "@/hooks/use-toast";
 import { downloadAudio } from "@/utils/audio-helpers";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { motion } from "framer-motion";
+import {
+  saveDocumentState,
+  loadDocumentState,
+  clearDocumentState,
+  blobToBase64,
+  DocumentConverterState as StoredDocumentState,
+} from "../lib/document-state-persistence";
 
 interface ProcessingResult {
   text: string;
@@ -37,6 +45,8 @@ export default function DocumentConverter() {
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [fullTextAudioUrl, setFullTextAudioUrl] = useState<string | null>(null);
   const [summaryAudioUrl, setSummaryAudioUrl] = useState<string | null>(null);
+  const [fullTextAudioBlob, setFullTextAudioBlob] = useState<Blob | null>(null);
+  const [summaryAudioBlob, setSummaryAudioBlob] = useState<Blob | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileAnalysis, setFileAnalysis] = useState<FileAnalysis | null>(null);
@@ -49,6 +59,133 @@ export default function DocumentConverter() {
   } | null>(null);
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const [showRestoreNotice, setShowRestoreNotice] = useState(false);
+  const [documentBlob, setDocumentBlob] = useState<Blob | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  const generatePreview = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/generate-preview", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate preview");
+      }
+
+      return data.previewUrl;
+    } catch (error) {
+      console.error("Preview generation failed:", error);
+      return null;
+    }
+  };
+
+  // Load saved state on mount
+  useEffect(() => {
+    const savedState = loadDocumentState();
+    if (savedState) {
+      if (savedState.documentBlob) {
+        setDocumentBlob(savedState.documentBlob);
+        setFileName(savedState.fileName);
+
+        // Create a File object from the Blob
+        const file = new File(
+          [savedState.documentBlob],
+          savedState.fileName || "document",
+          {
+            type: savedState.documentBlob.type,
+          }
+        );
+        setSelectedFile(file);
+
+        // Restore text and summary
+        if (savedState.fullText) {
+          setResult({
+            text: savedState.fullText,
+            summary: savedState.summary || undefined,
+          });
+        }
+
+        // Restore audio URLs and blobs
+        if (savedState.fullTextAudioBlob) {
+          const audioUrl = URL.createObjectURL(savedState.fullTextAudioBlob);
+          setFullTextAudioUrl(audioUrl);
+          setFullTextAudioBlob(savedState.fullTextAudioBlob);
+        }
+
+        if (savedState.summaryAudioBlob) {
+          const audioUrl = URL.createObjectURL(savedState.summaryAudioBlob);
+          setSummaryAudioUrl(audioUrl);
+          setSummaryAudioBlob(savedState.summaryAudioBlob);
+        }
+
+        // Generate preview
+        generatePreview(file).then((url) => {
+          if (url) setPreviewUrl(url);
+        });
+
+        // Analyze file
+        analyzeFile(file);
+
+        setShowRestoreNotice(true);
+        setTimeout(() => setShowRestoreNotice(false), 3000);
+      }
+    }
+  }, []);
+
+  // Save state when important data changes
+  useEffect(() => {
+    const saveState = async () => {
+      if (!documentBlob) return;
+
+      try {
+        const state: Partial<StoredDocumentState> = {
+          documentBlob,
+          fileName,
+          fullText: result?.text || null,
+          summary: result?.summary || null,
+          fullTextAudioBlob: fullTextAudioBlob,
+          summaryAudioBlob: summaryAudioBlob,
+        };
+
+        await saveDocumentState(state);
+      } catch (error) {
+        console.error("Error saving document state:", error);
+      }
+    };
+
+    // Add a small delay to ensure URLs are ready
+    const timeoutId = setTimeout(saveState, 100);
+    return () => clearTimeout(timeoutId);
+  }, [
+    documentBlob,
+    fileName,
+    result?.text,
+    result?.summary,
+    fullTextAudioUrl,
+    summaryAudioUrl,
+  ]);
+
+  // Add cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clean up audio URLs to prevent memory leaks
+      if (fullTextAudioUrl) {
+        URL.revokeObjectURL(fullTextAudioUrl);
+      }
+      if (summaryAudioUrl) {
+        URL.revokeObjectURL(summaryAudioUrl);
+      }
+      if (previewUrl && !previewUrl.startsWith("/")) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [fullTextAudioUrl, summaryAudioUrl, previewUrl]);
 
   useEffect(() => {
     if (isAuthenticated === false) {
@@ -119,28 +256,6 @@ export default function DocumentConverter() {
     }
   };
 
-  const generatePreview = async (file: File) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/generate-preview", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate preview");
-      }
-
-      return data.previewUrl;
-    } catch (error) {
-      console.error("Preview generation failed:", error);
-      return null;
-    }
-  };
-
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -148,33 +263,50 @@ export default function DocumentConverter() {
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      alert("File size must be less than 10MB");
+      toast({
+        title: "File too large",
+        description: "Please upload a file smaller than 10MB",
+        variant: "destructive",
+      });
       return;
     }
 
-    setSelectedFile(file);
+    // Clear existing state
+    clearDocumentState();
+
+    // Clear all state variables
+    setDocumentBlob(null);
+    setFileName(null);
+    setSelectedFile(null);
     setResult(null);
     setFullTextAudioUrl(null);
     setSummaryAudioUrl(null);
+    setPreviewUrl(null);
+    setFileAnalysis(null);
+    setFullTextAudioBlob(null);
+    setSummaryAudioBlob(null);
 
-    // Generate preview for all file types using FormData
-    const formData = new FormData();
-    formData.append("file", file);
+    // Revoke any existing object URLs
+    if (fullTextAudioUrl) {
+      URL.revokeObjectURL(fullTextAudioUrl);
+    }
+    if (summaryAudioUrl) {
+      URL.revokeObjectURL(summaryAudioUrl);
+    }
+    if (previewUrl && !previewUrl.startsWith("/")) {
+      URL.revokeObjectURL(previewUrl);
+    }
 
-    try {
-      const response = await fetch("/api/generate-preview", {
-        method: "POST",
-        body: formData,
-      });
+    // Set new file state
+    setSelectedFile(file);
+    setDocumentBlob(file);
+    setFileName(file.name);
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate preview");
-      }
-
-      setPreviewUrl(data.previewUrl);
-    } catch (error) {
-      console.error("Error generating preview:", error);
+    // Generate preview
+    const newPreviewUrl = await generatePreview(file);
+    if (newPreviewUrl) {
+      setPreviewUrl(newPreviewUrl);
+    } else {
       setPreviewUrl("/document-icon.png"); // Fallback to generic icon
     }
 
@@ -328,49 +460,90 @@ export default function DocumentConverter() {
       // Generate summary if needed
       if (mode === "summary" && !result?.summary) {
         setIsSummaryLoading(true);
-        const summaryResponse = await fetch("/api/summarize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: currentText }),
-        });
+        try {
+          const summaryResponse = await fetch("/api/summarize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: currentText }),
+          });
 
-        const summaryData = await summaryResponse.json();
-        if (!summaryResponse.ok) {
-          if (summaryResponse.status === 402) {
-            setInsufficientCreditsData({
-              required: summaryData.required,
-              available: summaryData.available,
-            });
-            setShowInsufficientCreditsModal(true);
-            return;
+          let summaryData;
+          try {
+            const rawText = await summaryResponse.text();
+            summaryData = JSON.parse(rawText);
+          } catch (parseError) {
+            console.error("Error parsing summary response:", parseError);
+            throw new Error("Invalid response from summary API");
           }
-          throw new Error(summaryData.error || "Failed to generate summary");
+
+          if (!summaryResponse.ok) {
+            if (summaryResponse.status === 402) {
+              setInsufficientCreditsData({
+                required: summaryData.required,
+                available: summaryData.available,
+              });
+              setShowInsufficientCreditsModal(true);
+              return;
+            }
+            console.error("Summary API error:", summaryData);
+            throw new Error(
+              summaryData.error ||
+                `Failed to generate summary (${summaryResponse.status})`
+            );
+          }
+
+          if (!summaryData.summary) {
+            console.error("Missing summary in response:", summaryData);
+            throw new Error("No summary returned from API");
+          }
+
+          if (summaryData.provider === "openai") {
+            toast({
+              title: "Using Backup Service",
+              description:
+                "Primary service was unavailable, using different service instead",
+              variant: "default",
+            });
+          }
+
+          // Format the summary text with proper paragraph breaks
+          const formattedSummary = summaryData.summary
+            .replace(
+              /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
+              ".\n\n$1 "
+            )
+            .replace(
+              /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
+              "$1$2\n\n"
+            )
+            .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
+            .replace(
+              /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
+              "$1\n\n$2"
+            )
+            .replace(/[^\S\n]+/g, " ")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+
+          summaryText = formattedSummary;
+          setResult((prev) =>
+            prev ? { ...prev, summary: formattedSummary } : null
+          );
+          totalCreditsDeducted += summaryData.creditsDeducted;
+        } catch (error) {
+          console.error("Summary generation error:", error);
+          toast({
+            title: "Summary Generation Failed",
+            description:
+              error instanceof Error
+                ? error.message
+                : "An unexpected error occurred",
+            variant: "destructive",
+          });
+          setIsSummaryLoading(false);
+          setIsTtsLoading(false);
+          return;
         }
-
-        // Format the summary text with proper paragraph breaks
-        const formattedSummary = summaryData.summary
-          .replace(
-            /\. (However|But|So|Then|After|Before|When|While|In|On|At|The|One|It|This|That|These|Those|My|His|Her|Their|Our|Your|If|Although|Though|Unless|Since|Because|As|And)\s/g,
-            ".\n\n$1 "
-          )
-          .replace(
-            /(Hi,|Hello,|Hey,|Greetings,|Welcome,)([^.!?]+[.!?])/g,
-            "$1$2\n\n"
-          )
-          .replace(/([.!?])\s*"([^"]+)"/g, '$1\n\n"$2"')
-          .replace(
-            /([.!?])\s*([A-Z][a-z]+\s+said|asked|replied|exclaimed)/g,
-            "$1\n\n$2"
-          )
-          .replace(/[^\S\n]+/g, " ")
-          .replace(/\n{3,}/g, "\n\n")
-          .trim();
-
-        summaryText = formattedSummary;
-        setResult((prev) =>
-          prev ? { ...prev, summary: formattedSummary } : null
-        );
-        totalCreditsDeducted += summaryData.creditsDeducted;
       }
 
       // Use the appropriate text for speech
@@ -413,11 +586,13 @@ export default function DocumentConverter() {
         const audioBlob = await audioResponse.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
 
-        // Store audio URL based on mode
+        // Store both URL and blob
         if (mode === "summary") {
           setSummaryAudioUrl(audioUrl);
+          setSummaryAudioBlob(audioBlob);
         } else {
           setFullTextAudioUrl(audioUrl);
+          setFullTextAudioBlob(audioBlob);
         }
       } catch (error) {
         console.error("Error loading TTS audio:", error);
@@ -474,6 +649,17 @@ export default function DocumentConverter() {
 
   return (
     <div className="flex flex-col items-center gap-6 sm:gap-8 p-4 sm:p-8">
+      {showRestoreNotice && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="fixed top-20 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-md shadow-lg z-50 flex items-center gap-2"
+        >
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          Previous session restored
+        </motion.div>
+      )}
       <div
         className={`w-full max-w-2xl space-y-4 ${!selectedFile ? "h-[calc(100vh-8rem)] flex flex-col justify-center" : ""}`}
       >
@@ -685,11 +871,10 @@ export default function DocumentConverter() {
                       </h4>
                       <Button
                         onClick={() => {
-                          if (fullTextAudioUrl) {
-                            downloadAudio(
-                              fullTextAudioUrl,
-                              `full-text-${Date.now()}.mp3`
-                            );
+                          if (fullTextAudioBlob) {
+                            const url = URL.createObjectURL(fullTextAudioBlob);
+                            downloadAudio(url, `full-text-${Date.now()}.mp3`);
+                            URL.revokeObjectURL(url);
                           }
                         }}
                         variant="ghost"
@@ -792,11 +977,10 @@ export default function DocumentConverter() {
                       </h4>
                       <Button
                         onClick={() => {
-                          if (summaryAudioUrl) {
-                            downloadAudio(
-                              summaryAudioUrl,
-                              `summary-${Date.now()}.mp3`
-                            );
+                          if (summaryAudioBlob) {
+                            const url = URL.createObjectURL(summaryAudioBlob);
+                            downloadAudio(url, `summary-${Date.now()}.mp3`);
+                            URL.revokeObjectURL(url);
                           }
                         }}
                         variant="ghost"
