@@ -236,16 +236,46 @@ function PricingContent() {
           router.replace(newUrl);
         });
     }
-
-    // Detect user's location/currency preference
-    const userLocale = navigator.language;
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    // Set GBP for UK users (based on locale or timezone)
-    if (userLocale.includes("GB") || userTimezone.includes("London")) {
-      setCurrency("GBP");
-    }
   }, [searchParams, user, router, refreshCredits, hasCheckedSession]);
+
+  // Separate useEffect for currency detection
+  useEffect(() => {
+    // Check local storage first
+    const storedCurrency = localStorage.getItem("preferred_currency");
+    if (storedCurrency === "GBP" || storedCurrency === "USD") {
+      setCurrency(storedCurrency);
+      return;
+    }
+
+    // Try to detect currency from browser locale
+    try {
+      const formatter = new Intl.NumberFormat(navigator.language, {
+        style: "currency",
+        currency: "USD",
+        currencyDisplay: "symbol",
+      });
+
+      const userLocale = navigator.language;
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userCurrency = formatter.resolvedOptions().currency;
+
+      // Set GBP for UK users based on multiple signals
+      const shouldUseGBP =
+        userLocale.includes("GB") ||
+        userTimezone.includes("London") ||
+        userTimezone.includes("Europe/London") ||
+        userCurrency === "GBP";
+
+      const detectedCurrency = shouldUseGBP ? "GBP" : "USD";
+      setCurrency(detectedCurrency);
+      localStorage.setItem("preferred_currency", detectedCurrency);
+    } catch (error) {
+      console.error("Error detecting currency:", error);
+      // Fallback to USD
+      setCurrency("USD");
+      localStorage.setItem("preferred_currency", "USD");
+    }
+  }, []); // Run only once on component mount
 
   const handlePurchase = async (
     priceId: string,

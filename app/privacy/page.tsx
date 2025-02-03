@@ -51,7 +51,37 @@ export default function PrivacyPolicy() {
               </ul>
 
               <h3 className="text-lg sm:text-xl font-medium mb-2 mt-4">
-                2.3 Cookies and Tracking Technologies
+                2.3 Local Storage
+              </h3>
+              <p className="text-sm sm:text-base mb-4">
+                We use browser local storage to enhance your experience by
+                temporarily saving:
+              </p>
+              <ul className="list-disc pl-6 space-y-2 text-sm sm:text-base">
+                <li>
+                  Voice assistant session data (audio files, transcriptions, and
+                  summaries)
+                </li>
+                <li>
+                  Document converter session data (documents, text, and
+                  generated audio)
+                </li>
+                <li>
+                  User preferences and settings (including currency display
+                  preferences)
+                </li>
+                <li>Cookie consent status</li>
+              </ul>
+              <p className="text-sm sm:text-base mt-4">
+                This data is stored only on your device and is not transmitted
+                to our servers. You can clear this data at any time by clearing
+                your browser's local storage or through your browser's settings.
+                Clearing local storage will reset your preferences to default
+                values.
+              </p>
+
+              <h3 className="text-lg sm:text-xl font-medium mb-2 mt-4">
+                2.4 Cookies and Tracking Technologies
               </h3>
               <p className="text-sm sm:text-base mb-4">
                 We use cookies and similar tracking technologies to track
