@@ -8,6 +8,9 @@ import "./globals.css";
 import { Metadata } from "next";
 import GoogleAnalytics from "@/components/google-analytics";
 import CookieConsent from "@/components/cookie-consent";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import PostHogProvider from "@/components/posthog";
+import Hotjar from "@/components/hotjar";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -145,6 +148,9 @@ export default function RootLayout({
         )}
       >
         <GoogleAnalytics />
+        <PostHogProvider />
+        <Hotjar />
+        <SpeedInsights />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

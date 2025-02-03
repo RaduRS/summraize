@@ -7,6 +7,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@contentsquare/tag-sdk": "^1.1.0",
     "@deepgram/sdk": "^3.9.0",
     "@ffmpeg/core": "^0.12.6",
     "@ffmpeg/ffmpeg": "^0.12.15",
@@ -28,6 +29,7 @@
     "@stripe/stripe-js": "^5.6.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "latest",
+    "@vercel/speed-insights": "^1.1.0",
     "autoprefixer": "10.4.20",
     "canvas": "^3.1.0",
     "class-variance-authority": "^0.7.1",
@@ -40,8 +42,10 @@
     "openai": "^4.80.1",
     "pdf-parse-fork": "^1.2.0",
     "pdfjs-dist": "^4.10.38",
+    "posthog-js": "^1.215.1",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "react-hotjar": "^6.3.1",
     "replicate": "^1.0.1",
     "stripe": "^17.6.0"
   },
