@@ -22,12 +22,6 @@ export async function GET(request: Request) {
       expand: ["line_items"],
     });
 
-    console.log("Session retrieved:", {
-      id: session.id,
-      customerId: session.customer,
-      lineItems: session.line_items?.data,
-    });
-
     if (!session) {
       console.error("No session found");
       return NextResponse.json(
@@ -98,17 +92,8 @@ export async function GET(request: Request) {
       );
     }
 
-    console.log("Current user credits:", userCredits?.credits || 0);
-
     const currentCredits = userCredits?.credits || 0;
     const newCredits = currentCredits + creditsToAdd;
-
-    console.log("Updating credits:", {
-      currentCredits,
-      creditsToAdd,
-      newCredits,
-      userId: session.metadata?.userId,
-    });
 
     // Start a transaction
     const { error: transactionError } = await supabase.rpc(

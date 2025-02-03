@@ -4,11 +4,14 @@ import { createClient } from "@/utils/supabase/client";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { User } from "@supabase/supabase-js";
+import { creditsEvent } from "@/lib/credits-event";
 
 // Protected pages that require authentication
 const PROTECTED_PATHS = ["/voice-assistant", "/document-converter"];
 // Auth pages that should redirect to voice-assistant if already authenticated
 const AUTH_PATHS = ["/sign-in", "/sign-up"];
+// Pages that should never redirect even if authenticated
+const NO_REDIRECT_PATHS = ["/pricing"];
 
 export function useAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -78,6 +81,7 @@ export function useAuth() {
     if (!user) return;
 
     try {
+      console.log("Refreshing credits for user:", user.id);
       // Get credits from user_credits table
       const { data: userCredits, error } = await supabase
         .from("user_credits")
@@ -89,6 +93,8 @@ export function useAuth() {
         console.error("Failed to refresh credits:", error);
         return;
       }
+
+      console.log("New credits value:", userCredits?.credits);
 
       // Update the user state with the new credits
       if (userCredits) {
@@ -102,6 +108,9 @@ export function useAuth() {
             },
           };
         });
+
+        // Emit the credits event to trigger UI updates
+        creditsEvent.emit();
       }
     } catch (error) {
       console.error("Error refreshing credits:", error);
@@ -129,7 +138,11 @@ export function useAuth() {
         router.refresh();
       } else if (event === "SIGNED_IN") {
         router.refresh();
-        if (!PROTECTED_PATHS.includes(pathname)) {
+        // Only redirect to voice-assistant if we're on an auth page
+        if (
+          AUTH_PATHS.includes(pathname) &&
+          !NO_REDIRECT_PATHS.includes(pathname)
+        ) {
           await router.replace("/voice-assistant");
         }
       }

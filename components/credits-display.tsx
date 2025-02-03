@@ -13,15 +13,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { creditsEvent } from "@/lib/credits-event";
 import { cn } from "@/lib/utils";
 
-interface CreditDeduction {
+interface CreditChange {
   id: number;
   amount: number;
+  type: "addition" | "deduction";
 }
 
 export function CreditsDisplay() {
   const [credits, setCredits] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [deductions, setDeductions] = useState<CreditDeduction[]>([]);
+  const [creditChanges, setCreditChanges] = useState<CreditChange[]>([]);
   const [lastCredits, setLastCredits] = useState<number | null>(null);
   const supabase = createClient();
 
@@ -40,19 +41,24 @@ export function CreditsDisplay() {
           .single();
 
         if (data) {
-          if (lastCredits !== null && data.credits < lastCredits) {
-            const deductionAmount = lastCredits - data.credits;
-            const newDeduction = {
-              id: Date.now(),
-              amount: deductionAmount,
-            };
-            setDeductions((prev) => [...prev, newDeduction]);
-            // Remove the deduction after animation
-            setTimeout(() => {
-              setDeductions((prev) =>
-                prev.filter((d) => d.id !== newDeduction.id)
-              );
-            }, 2000);
+          if (lastCredits !== null) {
+            const difference = data.credits - lastCredits;
+            if (difference !== 0) {
+              const changeType =
+                difference > 0 ? ("addition" as const) : ("deduction" as const);
+              const newChange: CreditChange = {
+                id: Date.now(),
+                amount: Math.abs(difference),
+                type: changeType,
+              };
+              setCreditChanges((prev) => [...prev, newChange]);
+              // Remove the change after animation
+              setTimeout(() => {
+                setCreditChanges((prev) =>
+                  prev.filter((d) => d.id !== newChange.id)
+                );
+              }, 2000);
+            }
           }
           setLastCredits(data.credits);
           setCredits(data.credits);
@@ -86,15 +92,18 @@ export function CreditsDisplay() {
             <span className="font-medium text-sm">
               {credits.toLocaleString()}
             </span>
-            {deductions.map((deduction) => (
+            {creditChanges.map((change) => (
               <span
-                key={deduction.id}
+                key={change.id}
                 className={cn(
-                  "absolute right-0 text-sm font-medium text-red-500 opacity-0",
-                  "animate-[deduction_2s_ease-out_forwards]"
+                  "absolute right-0 text-sm font-medium opacity-0",
+                  change.type === "addition"
+                    ? "text-green-500 animate-[addition_2s_ease-out_forwards]"
+                    : "text-red-500 animate-[deduction_2s_ease-out_forwards]"
                 )}
               >
-                -{deduction.amount.toLocaleString()}
+                {change.type === "addition" ? "+" : "-"}
+                {change.amount.toLocaleString()}
               </span>
             ))}
           </div>

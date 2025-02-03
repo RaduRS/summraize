@@ -15,6 +15,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatTranscript } from "@/helpers/formatTranscript";
+import {
+  saveVoiceAssistantState,
+  loadVoiceAssistantState,
+  clearVoiceAssistantState,
+  blobToBase64,
+  VoiceAssistantState as StoredVoiceAssistantState,
+} from "../lib/state-persistence";
 
 interface ProcessingResult {
   transcription: string;
@@ -28,6 +35,16 @@ interface Word {
   end: number;
   confidence: number;
   punctuated_word: string;
+}
+
+interface VoiceAssistantState {
+  audioBlob: Blob;
+  transcription: string | null;
+  summary: string | null;
+  audioDuration: number;
+  finalDuration: number;
+  words: Word[];
+  ttsAudioBlob?: Blob;
 }
 
 export default function VoiceAssistant() {
@@ -64,6 +81,7 @@ export default function VoiceAssistant() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [words, setWords] = useState<Word[]>([]);
+  const [showRestoreNotice, setShowRestoreNotice] = useState(false);
 
   const cleanTextForTTS = (text: string) => {
     return text
@@ -86,8 +104,120 @@ export default function VoiceAssistant() {
     return null;
   }
 
+  // Load saved state on mount
+  useEffect(() => {
+    const savedState = loadVoiceAssistantState();
+    if (savedState) {
+      // Always restore transcription and words if they exist
+      if (savedState.transcription) {
+        setPartialTranscript(savedState.transcription);
+      }
+      if (savedState.words) {
+        setWords(savedState.words);
+      }
+
+      // Restore audio blob and related state if it exists
+      if (savedState.audioBlob) {
+        setAudioBlob(savedState.audioBlob);
+        setAudioDuration(savedState.audioDuration);
+        setFinalDuration(savedState.finalDuration);
+
+        // Create audio URL from blob
+        const audioUrl = URL.createObjectURL(savedState.audioBlob);
+
+        // Set initial result with audio URL and transcription
+        setResult({
+          transcription: savedState.transcription || "",
+          audioUrl,
+          summary: savedState.summary || undefined,
+        });
+
+        // Restore TTS audio if it exists
+        if (savedState.ttsAudioBlob) {
+          const ttsUrl = URL.createObjectURL(savedState.ttsAudioBlob);
+          setTtsAudioUrl(ttsUrl);
+        }
+
+        setShowRestoreNotice(true);
+        setTimeout(() => setShowRestoreNotice(false), 3000);
+      }
+    }
+  }, []);
+
+  // Save state when important data changes
+  useEffect(() => {
+    const saveState = async () => {
+      if (!audioBlob) return;
+
+      const state: Partial<StoredVoiceAssistantState> = {
+        audioBlob,
+        transcription: result?.transcription || null,
+        summary: result?.summary || null,
+        audioDuration,
+        finalDuration,
+        words,
+      };
+
+      // If we have TTS audio, get the blob
+      if (ttsAudioUrl) {
+        try {
+          const response = await fetch(ttsAudioUrl);
+          const ttsBlob = await response.blob();
+          state.ttsAudioBlob = ttsBlob;
+        } catch (error) {
+          console.error("Error getting TTS blob:", error);
+        }
+      }
+
+      await saveVoiceAssistantState(state);
+    };
+
+    saveState();
+  }, [
+    audioBlob,
+    result?.transcription,
+    result?.summary,
+    ttsAudioUrl,
+    audioDuration,
+    finalDuration,
+    words,
+  ]);
+
+  // Add cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clean up audio URLs to prevent memory leaks
+      if (result?.audioUrl) {
+        URL.revokeObjectURL(result.audioUrl);
+      }
+      if (ttsAudioUrl) {
+        URL.revokeObjectURL(ttsAudioUrl);
+      }
+    };
+  }, [result?.audioUrl, ttsAudioUrl]);
+
   const startRecording = async () => {
     try {
+      // Clear existing state
+      clearVoiceAssistantState();
+
+      // Clear all state variables
+      setAudioBlob(null);
+      setResult(null);
+      setPartialTranscript("");
+      setWords([]);
+      setTtsAudioUrl(null);
+      setAudioDuration(0);
+      setFinalDuration(0);
+
+      // Revoke any existing object URLs
+      if (result?.audioUrl) {
+        URL.revokeObjectURL(result.audioUrl);
+      }
+      if (ttsAudioUrl) {
+        URL.revokeObjectURL(ttsAudioUrl);
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       // Initialize WebSocket connection
@@ -477,7 +607,27 @@ export default function VoiceAssistant() {
       return;
     }
 
-    // Use the same flow as recording
+    // Clear existing state
+    clearVoiceAssistantState();
+
+    // Clear all state variables
+    setAudioBlob(null);
+    setResult(null);
+    setPartialTranscript("");
+    setWords([]);
+    setTtsAudioUrl(null);
+    setAudioDuration(0);
+    setFinalDuration(0);
+
+    // Revoke any existing object URLs
+    if (result?.audioUrl) {
+      URL.revokeObjectURL(result.audioUrl);
+    }
+    if (ttsAudioUrl) {
+      URL.revokeObjectURL(ttsAudioUrl);
+    }
+
+    // Handle the new file
     handleAudioReady(file);
   };
 
@@ -957,6 +1107,17 @@ export default function VoiceAssistant() {
 
   return (
     <div className="flex flex-col items-center gap-6 sm:gap-8 p-4 sm:p-8">
+      {showRestoreNotice && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="fixed top-20 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-md shadow-lg z-50 flex items-center gap-2"
+        >
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          Previous session restored
+        </motion.div>
+      )}
       <div
         className={`w-full max-w-2xl space-y-4 ${!audioBlob ? "h-[calc(100vh-8rem)] flex flex-col justify-center" : ""}`}
       >
