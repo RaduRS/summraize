@@ -41,9 +41,9 @@ export default function CookieConsent() {
               <h3 className="font-medium mb-2">
                 🍪 Cookie and Analytics Notice
               </h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground flex flex-col">
                 We use cookies and analytics tools to enhance your experience,
-                analyze website traffic, and improve our services.{" "}
+                analyze website traffic, and improve our services.
                 <Link href="/privacy" className="underline hover:text-primary">
                   Learn more
                 </Link>
