@@ -215,7 +215,7 @@ export default async function BlogPost({ params }: { params: Params }) {
   const readingTime = getReadingTime(post.content);
 
   return (
-    <article className="container mx-auto max-w-4xl w-full px-6 py-16">
+    <article className="container mx-auto max-w-5xl w-full px-6 py-16">
       {/* Breadcrumb */}
       <nav className="flex items-center space-x-2 mb-8 text-sm flex-row justify-between">
         <Link

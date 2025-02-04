@@ -4,9 +4,7 @@ import { notFound } from "next/navigation";
 import BlogPostForm from "../../components/BlogPostForm";
 
 interface Props {
-  params: {
-    slug: string;
-  };
+  params: Promise<{ slug: string }>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
