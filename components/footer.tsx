@@ -8,6 +8,7 @@ import {
   FileText,
   X as XIcon,
   LinkedinIcon,
+  Newspaper,
 } from "lucide-react";
 
 export function Footer() {
@@ -36,6 +37,13 @@ export function Footer() {
                 >
                   <FileText className="h-4 w-4" />
                   Document Converter
+                </Link>
+                <Link
+                  href="/blog"
+                  className="text-sm text-muted-foreground hover:text-primary flex items-center gap-2"
+                >
+                  <Newspaper className="h-4 w-4" />
+                  Blog
                 </Link>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
                   <CreditCard className="h-4 w-4" />

@@ -11,6 +11,7 @@ import CookieConsent from "@/components/cookie-consent";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import PostHogProvider from "@/components/posthog";
 import Hotjar from "@/components/hotjar";
+import Script from "next/script";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -141,6 +142,62 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning className={geistSans.variable}>
+      <head>
+        <Script
+          id="schema-org"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "summraize",
+              url: "https://www.summraize.com",
+              potentialAction: {
+                "@type": "SearchAction",
+                target: {
+                  "@type": "EntryPoint",
+                  urlTemplate:
+                    "https://www.summraize.com/search?q={search_term_string}",
+                },
+                "query-input": "required name=search_term_string",
+              },
+              mainEntity: {
+                "@type": "Organization",
+                name: "summraize",
+                url: "https://www.summraize.com",
+                sameAs: [
+                  "https://twitter.com/summraize",
+                  "https://linkedin.com/company/summraize",
+                ],
+              },
+              hasPart: [
+                {
+                  "@type": "WebPage",
+                  name: "Blog",
+                  description:
+                    "Latest articles and insights about AI, document processing, and productivity",
+                  url: "https://www.summraize.com/blog",
+                  isPartOf: {
+                    "@type": "WebSite",
+                    "@id": "https://www.summraize.com",
+                  },
+                },
+                {
+                  "@type": "WebPage",
+                  name: "Pricing",
+                  description:
+                    "Flexible pricing plans for all your document processing needs",
+                  url: "https://www.summraize.com/pricing",
+                  isPartOf: {
+                    "@type": "WebSite",
+                    "@id": "https://www.summraize.com",
+                  },
+                },
+              ],
+            }),
+          }}
+        />
+      </head>
       <body
         className={cn(
           "min-h-screen bg-background antialiased",

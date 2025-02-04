@@ -67,6 +67,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
+  // Check if accessing admin routes
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    if (!session) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    // Only allow specific email
+    if (user?.email !== "rsrusu90@gmail.com") {
+      return NextResponse.redirect(new URL("/blog", request.url));
+    }
+  }
+
   return response;
 }
 
@@ -81,5 +97,6 @@ export const config = {
      * Feel free to modify this pattern to include more paths.
      */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/admin/:path*",
   ],
 };
