@@ -117,7 +117,7 @@ async function BlogPosts() {
 
 export default function BlogPage() {
   return (
-    <div className="container mx-auto max-w-7xl w-full px-5 py-16">
+    <div className="container mx-auto max-w-6xl w-full px-5 py-16">
       <h1 className="text-4xl font-bold mb-8">Latest Articles</h1>
       <Suspense
         fallback={
