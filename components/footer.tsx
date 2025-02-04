@@ -2,7 +2,13 @@
 
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import Link from "next/link";
-import { CreditCard, Headphones, FileText } from "lucide-react";
+import {
+  CreditCard,
+  Headphones,
+  FileText,
+  X as XIcon,
+  LinkedinIcon,
+} from "lucide-react";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -67,6 +73,26 @@ export function Footer() {
                 >
                   Terms of Service
                 </Link>
+                <div className="flex items-center gap-4 mt-2">
+                  <Link
+                    href="https://twitter.com/summraize"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground hover:text-primary flex items-center gap-2"
+                  >
+                    <XIcon className="h-4 w-4" />
+                    <span className="sr-only">X (Twitter)</span>
+                  </Link>
+                  <Link
+                    href="https://linkedin.com/company/summraize"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground hover:text-primary flex items-center gap-2"
+                  >
+                    <LinkedinIcon className="h-4 w-4" />
+                    <span className="sr-only">LinkedIn</span>
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
@@ -76,7 +102,9 @@ export function Footer() {
             <div className="flex flex-col items-center md:items-start">
               <h3 className="text-sm font-semibold mb-4">Settings & Info</h3>
               <div className="flex flex-col items-center md:items-start space-y-3">
-                <ThemeSwitcher />
+                <div className="flex items-center gap-4">
+                  <ThemeSwitcher />
+                </div>
                 <p className="text-xs text-muted-foreground max-w-xs">
                   <span className="font-bold">
                     summr
