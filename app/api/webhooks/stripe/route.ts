@@ -50,18 +50,18 @@ export async function POST(req: Request) {
 
         // Map price IDs to credit amounts
         const creditMapping: { [key: string]: number } = {
-          price_1Qo1M9DPKHEepAzYaeiySo1H: 2000, // Starter USD
-          price_1Qo2WiDPKHEepAzYjejkU3xj: 2000, // Starter GBP
-          price_1Qo1MoDPKHEepAzYkf9Wdxrh: 5000, // Basic USD
-          price_1Qo2X3DPKHEepAzYZsyzMC5J: 5000, // Basic GBP
-          price_1Qo1NtDPKHEepAzYs1Wt1Ki4: 10000, // Pro USD
-          price_1Qo2XMDPKHEepAzYN6gcWel8: 10000, // Pro GBP
-          price_1Qo1P4DPKHEepAzYukfC0Dbh: 20000, // Business USD
-          price_1Qo2XgDPKHEepAzYPNDGKATB: 20000, // Business GBP
-          price_1Qo1QADPKHEepAzYNs4Re7ey: 50000, // Enterprise USD
-          price_1Qo2Y1DPKHEepAzYXMqFLQsD: 50000, // Enterprise GBP
-          price_1Qo1QUDPKHEepAzYsSlxW8hr: 100000, // Ultimate USD
-          price_1Qo2YMDPKHEepAzY5X2VzMJV: 100000, // Ultimate GBP
+          price_1QoiKqDPKHEepAzYjznrE8Pg: 2000, // Starter USD
+          price_1QoiKeDPKHEepAzYIBWxPCOc: 2000, // Starter GBP
+          price_1QoiKoDPKHEepAzYY5XvEYZc: 5000, // Basic USD
+          price_1QoiKcDPKHEepAzYzzVDhVbn: 5000, // Basic GBP
+          price_1QoiKmDPKHEepAzYzni07XHf: 10000, // Pro USD
+          price_1QoiKbDPKHEepAzYy1Br0SAp: 10000, // Pro GBP
+          price_1QoiKjDPKHEepAzYb6ZJcWr8: 20000, // Business USD
+          price_1QoiKZDPKHEepAzY0IbDaenO: 20000, // Business GBP
+          price_1QoiKhDPKHEepAzYMsXjaIDD: 50000, // Enterprise USD
+          price_1QoiKYDPKHEepAzYcrdj6g5y: 50000, // Enterprise GBP
+          price_1QoiKgDPKHEepAzYnn8V22vV: 100000, // Ultimate USD
+          price_1QoiKVDPKHEepAzYtfYAMr6w: 100000, // Ultimate GBP
         };
 
         // Get the price ID from the session

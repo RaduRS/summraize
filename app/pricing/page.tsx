@@ -85,8 +85,8 @@ const packages = [
     name: "Starter",
     credits: 2000,
     price: 2,
-    priceId: "price_1Qo1M9DPKHEepAzYaeiySo1H", // USD
-    gbpPriceId: "price_1Qo2WiDPKHEepAzYjejkU3xj", // GBP
+    priceId: "price_1QoiKqDPKHEepAzYjznrE8Pg", // USD
+    gbpPriceId: "price_1QoiKeDPKHEepAzYIBWxPCOc", // GBP
     features: [
       "~110 minutes of audio transcription",
       "~12 million words of text-to-speech",
@@ -98,8 +98,8 @@ const packages = [
     name: "Basic",
     credits: 5000,
     price: 5,
-    priceId: "price_1Qo1MoDPKHEepAzYkf9Wdxrh", // USD
-    gbpPriceId: "price_1Qo2X3DPKHEepAzYZsyzMC5J", // GBP
+    priceId: "price_1QoiKoDPKHEepAzYY5XvEYZc", // USD
+    gbpPriceId: "price_1QoiKcDPKHEepAzYzzVDhVbn", // GBP
     features: [
       "~275 minutes of audio transcription",
       "~30 million words of text-to-speech",
@@ -111,8 +111,8 @@ const packages = [
     name: "Pro",
     credits: 10000,
     price: 10,
-    priceId: "price_1Qo1NtDPKHEepAzYs1Wt1Ki4", // USD
-    gbpPriceId: "price_1Qo2XMDPKHEepAzYN6gcWel8", // GBP
+    priceId: "price_1QoiKmDPKHEepAzYzni07XHf", // USD
+    gbpPriceId: "price_1QoiKbDPKHEepAzYy1Br0SAp", // GBP
     features: [
       "~550 minutes of audio transcription",
       "~60 million words of text-to-speech",
@@ -124,8 +124,8 @@ const packages = [
     name: "Business",
     credits: 20000,
     price: 20,
-    priceId: "price_1Qo1P4DPKHEepAzYukfC0Dbh", // USD
-    gbpPriceId: "price_1Qo2XgDPKHEepAzYPNDGKATB", // GBP
+    priceId: "price_1QoiKjDPKHEepAzYb6ZJcWr8", // USD
+    gbpPriceId: "price_1QoiKZDPKHEepAzY0IbDaenO", // GBP
     features: [
       "~1,100 minutes of audio transcription",
       "~120 million words of text-to-speech",
@@ -137,8 +137,8 @@ const packages = [
     name: "Enterprise",
     credits: 50000,
     price: 50,
-    priceId: "price_1Qo1QADPKHEepAzYNs4Re7ey", // USD
-    gbpPriceId: "price_1Qo2Y1DPKHEepAzYXMqFLQsD", // GBP
+    priceId: "price_1QoiKhDPKHEepAzYMsXjaIDD", // USD
+    gbpPriceId: "price_1QoiKYDPKHEepAzYcrdj6g5y", // GBP
     features: [
       "~2,750 minutes of audio transcription",
       "~300 million words of text-to-speech",
@@ -150,8 +150,8 @@ const packages = [
     name: "Ultimate",
     credits: 100000,
     price: 100,
-    priceId: "price_1Qo1QUDPKHEepAzYsSlxW8hr", // USD
-    gbpPriceId: "price_1Qo2YMDPKHEepAzY5X2VzMJV", // GBP
+    priceId: "price_1QoiKgDPKHEepAzYnn8V22vV", // USD
+    gbpPriceId: "price_1QoiKVDPKHEepAzYtfYAMr6w", // GBP
     features: [
       "~5,500 minutes of audio transcription",
       "~600 million words of text-to-speech",
