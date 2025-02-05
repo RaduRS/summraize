@@ -33,6 +33,39 @@ interface BlogPost {
   image_caption?: string;
 }
 
+// Custom component to handle text with URLs
+const AutoLinkText = ({ children }: { children: string }) => {
+  const urlPattern =
+    /\b(?:https?:\/\/)?(?:www\.)?\S+\.(?:com|ai|co|org|net|io|gov|edu|uk|us|ca|de|jp|fr|au|in|it|nl|se|no|es|mil|biz|info|mobi|name|aero|jobs|museum)\b/g;
+
+  const parts = children.split(urlPattern);
+  const matches = children.match(urlPattern) || [];
+
+  return (
+    <>
+      {parts.map((part, i) => (
+        <React.Fragment key={i}>
+          {part}
+          {matches[i] && (
+            <a
+              href={
+                matches[i].startsWith("http")
+                  ? matches[i]
+                  : `http://${matches[i]}`
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-600 hover:text-blue-800 underline"
+            >
+              {matches[i]}
+            </a>
+          )}
+        </React.Fragment>
+      ))}
+    </>
+  );
+};
+
 // Custom components for MDX
 const components = {
   StatsBlock,
@@ -43,6 +76,50 @@ const components = {
   CaseStudy,
   RelatedArticles,
   pre: (props: any) => <div {...props} />,
+  p: (props: any) => {
+    const content = props.children;
+
+    // Parse stats block
+    if (typeof content === "string" && content.startsWith("::: stats")) {
+      try {
+        // Extract the stats block content
+        const statsMatch = content.match(/::: stats\s*([\s\S]*?)\s*:::/);
+        if (statsMatch) {
+          const statsContent = statsMatch[1];
+
+          // Parse the title
+          const titleMatch = statsContent.match(/title: "([^"]+)"/);
+          const title = titleMatch ? titleMatch[1] : "Statistics";
+
+          // Parse the statistics
+          const statsMatches = Array.from(
+            statsContent.matchAll(/value: "([^"]+)"\s+label: "([^"]+)"/g)
+          );
+          const statistics = statsMatches.map((match) => ({
+            value: match[1],
+            label: match[2],
+          }));
+
+          if (statistics.length > 0) {
+            return <StatsBlock title={title} statistics={statistics} />;
+          }
+        }
+      } catch (error) {
+        console.error("Error parsing stats block:", error);
+      }
+    }
+
+    // Handle URL conversion for regular text
+    if (typeof content === "string") {
+      return (
+        <p className="text-lg text-gray-600 mb-4 leading-relaxed text-justify">
+          <AutoLinkText>{content}</AutoLinkText>
+        </p>
+      );
+    }
+
+    return <p {...props} />;
+  },
   code: ({ children, className }: { children: string; className?: string }) => {
     const language = className?.replace("language-", "") || "plaintext";
     return <CodeBlock code={children} language={language} />;
@@ -70,20 +147,6 @@ const components = {
     }
 
     return <ul {...props} />;
-  },
-  // Add custom parsers for special blocks
-  p: (props: any) => {
-    const content = props.children;
-
-    // Parse stats block
-    if (typeof content === "string" && content.startsWith("::: stats")) {
-      const match = content.match(/value: "([^"]+)"\s+label: "([^"]+)"/);
-      if (match) {
-        return <StatsBlock value={match[1]} label={match[2]} />;
-      }
-    }
-
-    return <p {...props} />;
   },
 };
 
@@ -215,7 +278,7 @@ export default async function BlogPost({ params }: { params: Params }) {
   const readingTime = getReadingTime(post.content);
 
   return (
-    <article className="container mx-auto max-w-5xl w-full px-6 py-16">
+    <article className="container mx-auto max-w-4xl w-full px-6 py-16">
       {/* Breadcrumb */}
       <nav className="flex items-center space-x-2 mb-8 text-sm flex-row justify-between">
         <Link
