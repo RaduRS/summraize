@@ -1,10 +1,25 @@
-/** @type {import('next-sitemap').IConfig} */
+const fs = require("fs");
+
+const siteUrl = process.env.SITE_URL || "https://www.summraize.com/";
+
+// Read the pre-fetched blog posts from JSON file
+let blogPosts = [];
+try {
+  const data = fs.readFileSync("./public/blog-sitemap.json", "utf8");
+  blogPosts = JSON.parse(data);
+} catch (error) {
+  console.warn(
+    "⚠️ Blog sitemap JSON not found or invalid. Running without blog posts."
+  );
+}
+
 module.exports = {
-  siteUrl: process.env.SITE_URL || "https://www.summraize.com/",
+  siteUrl,
   generateRobotsTxt: true,
   generateIndexSitemap: false,
-  exclude: ["/api/*", "/server-sitemap.xml"],
+  exclude: ["/admin/*", "/api/*", "/server-sitemap.xml"], // Excluding unnecessary routes
+  additionalPaths: async () => blogPosts, // Adding dynamic blog posts
   robotsTxtOptions: {
-    additionalSitemaps: ["https://www.summraize.com/server-sitemap.xml"],
+    additionalSitemaps: [`${siteUrl}server-sitemap.xml`], // Extra sitemaps (if any)
   },
 };
