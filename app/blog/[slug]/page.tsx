@@ -75,6 +75,84 @@ const components = {
   Quote,
   CaseStudy,
   RelatedArticles,
+  h1: (props: any) => (
+    <h1 className="text-4xl font-bold mb-6 mt-12 text-gray-900" {...props} />
+  ),
+  h2: (props: any) => (
+    <h2
+      className="text-3xl font-semibold mb-4 mt-10 text-gray-800"
+      {...props}
+    />
+  ),
+  h3: (props: any) => (
+    <h3 className="text-2xl font-semibold mb-3 mt-8 text-gray-700" {...props} />
+  ),
+  h4: (props: any) => (
+    <h4 className="text-xl font-semibold mb-2 mt-6 text-gray-700" {...props} />
+  ),
+  strong: (props: any) => {
+    const text = props.children;
+    // Check if the text starts with a dash and space
+    if (typeof text === "string" && text.startsWith("- ")) {
+      return (
+        <strong className="block mt-4">
+          <span className="text-gray-700">-</span> {text.substring(2)}
+        </strong>
+      );
+    }
+    return <strong className="font-semibold text-gray-900" {...props} />;
+  },
+  ul: (props: any) => {
+    const items = React.Children.toArray(props.children);
+
+    // Check if it's a checklist
+    if (
+      items.some(
+        (child: any) =>
+          child.type === "li" &&
+          typeof child.props.children === "string" &&
+          (child.props.children.startsWith("[ ]") ||
+            child.props.children.startsWith("[x]"))
+      )
+    ) {
+      const checklistItems = items
+        .filter((child: any) => child.type === "li")
+        .map((child: any) => {
+          const text = child.props.children;
+          return {
+            text: text.replace(/^\[[x\s]\]\s*/, ""),
+            checked: text.startsWith("[x]"),
+          };
+        });
+      return <ChecklistBlock items={checklistItems} />;
+    }
+
+    // Regular unordered list
+    return (
+      <ul className="list-disc pl-6 mb-4 space-y-2 text-gray-700" {...props} />
+    );
+  },
+  ol: (props: any) => (
+    <ol className="list-decimal pl-6 mb-4 space-y-2 text-gray-700" {...props} />
+  ),
+  li: (props: any) => (
+    <li className="mb-1 text-gray-700 leading-relaxed" {...props} />
+  ),
+  a: (props: any) => (
+    <a
+      className="text-blue-600 hover:text-blue-800 underline"
+      target={props.href?.startsWith("http") ? "_blank" : undefined}
+      rel={props.href?.startsWith("http") ? "noopener noreferrer" : undefined}
+      {...props}
+    />
+  ),
+  img: (props: any) => (
+    <img
+      className="rounded-lg shadow-md my-8 mx-auto"
+      loading="lazy"
+      {...props}
+    />
+  ),
   pre: (props: any) => <div {...props} />,
   p: (props: any) => {
     const content = props.children;
@@ -118,35 +196,16 @@ const components = {
       );
     }
 
-    return <p {...props} />;
+    return (
+      <p
+        className="text-lg text-gray-600 mb-4 leading-relaxed text-justify"
+        {...props}
+      />
+    );
   },
   code: ({ children, className }: { children: string; className?: string }) => {
     const language = className?.replace("language-", "") || "plaintext";
     return <CodeBlock code={children} language={language} />;
-  },
-  ul: (props: any) => {
-    const items = React.Children.toArray(props.children)
-      .filter((child: any) => child.type === "li")
-      .map((child: any) => {
-        const text = child.props.children;
-        if (
-          typeof text === "string" &&
-          (text.startsWith("[ ]") || text.startsWith("[x]"))
-        ) {
-          return {
-            text: text.replace(/^\[[x\s]\]\s*/, ""),
-            checked: text.startsWith("[x]"),
-          };
-        }
-        return null;
-      })
-      .filter(Boolean);
-
-    if (items.length > 0 && items.every((item) => item !== null)) {
-      return <ChecklistBlock items={items} />;
-    }
-
-    return <ul {...props} />;
   },
 };
 
