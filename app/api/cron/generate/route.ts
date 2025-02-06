@@ -8,7 +8,6 @@ export const maxDuration = 300; // Set maximum duration to 5 minutes
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL;
-const CRON_SECRET = process.env.CRON_SECRET;
 
 // Add detailed logging
 function log(message: string, data?: any) {
@@ -44,15 +43,6 @@ Make sure the content is high-quality, well-researched, and provides value to re
 export async function GET(request: Request) {
   try {
     log("Starting blog post generation");
-
-    // Verify cron authentication
-    const authHeader = request.headers.get("authorization");
-    if (CRON_SECRET) {
-      if (!authHeader || authHeader !== `Bearer ${CRON_SECRET}`) {
-        log("Authentication failed - Invalid or missing cron secret");
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-    }
 
     // Check if Deepseek API key is configured
     if (!DEEPSEEK_API_KEY) {

@@ -1,11 +1,11 @@
 {
   "crons": [
     {
-      "path": "/api/blog/generate",
-      "schedule": "15 17 * * *"
+      "path": "/api/cron/generate/route.ts",
+      "schedule": "25 17 * * *"
     },
     {
-      "path": "/api/blog/generate",
+      "path": "/api/cron/generate/route.ts",
       "schedule": "17 17 * * *"
     }
   ]
