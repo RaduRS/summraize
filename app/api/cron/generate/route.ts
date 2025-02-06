@@ -1,96 +1,74 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import OpenAI from "openai";
 
 export const runtime = "edge";
 export const preferredRegion = "auto";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // Set maximum duration to 5 minutes
 
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL;
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Add detailed logging
 function log(message: string, data?: any) {
   console.log(`[Blog Generator] ${message}`, data ? JSON.stringify(data) : "");
 }
 
-if (!DEEPSEEK_API_URL) {
-  throw new Error("DEEPSEEK_API_URL is not configured");
-}
+const BLOG_PROMPT = `Create a concise blog post about AI or productivity tools. Format:
 
-const BLOG_PROMPT = `Generate a comprehensive blog post about AI, machine learning, or productivity tools. The post should be informative, engaging, and follow this structure:
-
-1. An attention-grabbing title
-2. A brief excerpt summarizing the main points
-3. Detailed content with proper markdown formatting
-4. Include relevant statistics or case studies where appropriate
-
-The response should be a JSON object matching this structure:
 {
-  title: string,
-  slug: string (URL-friendly version of the title),
-  content: string (markdown formatted),
-  excerpt: string,
-  date: string (ISO format),
-  author_name: "Radu R",
-  updated_at: string (ISO format),
-  cover_image: string (optional URL),
-  image_caption: string (optional)
+  "title": "Brief, engaging title",
+  "slug": "url-friendly-version-of-title",
+  "content": "## Introduction\\n[2-3 sentences intro]\\n\\n## Main Points\\n- Point 1\\n- Point 2\\n- Point 3\\n\\n## Conclusion\\n[1-2 sentences wrap-up]",
+  "excerpt": "One sentence summary",
+  "date": "${new Date().toISOString()}",
+  "author_name": "Radu R",
+  "cover_image": null,
+  "image_caption": null
 }
 
-Make sure the content is high-quality, well-researched, and provides value to readers. Include proper markdown formatting with headers (##), bullet points, and emphasis where appropriate.`;
+Keep content focused and under 1000 words. Use markdown formatting.`;
 
 export async function GET(request: Request) {
   try {
     log("Starting blog post generation");
 
-    // Check if Deepseek API key is configured
-    if (!DEEPSEEK_API_KEY) {
-      log("Deepseek API key not configured");
-      throw new Error("Deepseek API key is not configured");
-    }
-
     const supabase = await createClient();
     log("Supabase client created");
 
-    // Generate blog post using Deepseek
-    log("Calling Deepseek API");
-    const response = await fetch(DEEPSEEK_API_URL as string, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "user",
-            content: BLOG_PROMPT,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 4096,
-      }),
+    // Generate blog post using OpenAI
+    log("Calling OpenAI API");
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a professional blog post generator. You create high-quality, engaging content. Create focused content in valid JSON format.",
+        },
+        {
+          role: "user",
+          content: BLOG_PROMPT,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 2048, // Reduced from 4096
+      response_format: { type: "json_object" },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      log("Deepseek API error", { status: response.status, error: errorText });
-      throw new Error(`Deepseek API error (${response.status}): ${errorText}`);
+    if (!completion.choices[0]?.message?.content) {
+      log("Missing content in OpenAI response");
+      throw new Error("Missing content in OpenAI response");
     }
 
-    const completion = await response.json();
-    if (!completion?.choices?.[0]?.message?.content) {
-      log("Missing content in Deepseek API response", completion);
-      throw new Error("Missing content in Deepseek API response");
-    }
-
-    log("Successfully received response from Deepseek");
+    log("Successfully received response from OpenAI");
     const generatedPost = JSON.parse(completion.choices[0].message.content);
 
     // Validate the generated post structure
-    const requiredFields = ["title", "slug", "content", "date", "updated_at"];
+    const requiredFields = ["title", "slug", "content", "date"];
     for (const field of requiredFields) {
       if (!generatedPost[field]) {
         log(`Missing required field in generated post: ${field}`);
@@ -113,7 +91,6 @@ export async function GET(request: Request) {
       date: generatedPost.date,
       cover_image: generatedPost.cover_image,
       author_name: generatedPost.author_name,
-      updated_at: generatedPost.updated_at,
       image_caption: generatedPost.image_caption,
       published: true,
     });
@@ -137,6 +114,7 @@ export async function GET(request: Request) {
     log("Error in blog post generation", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+
     return NextResponse.json(
       {
         success: false,

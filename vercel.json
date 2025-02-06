@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/generate/route.ts",
-      "schedule": "50 17 * * *"
+      "schedule": "43 18 * * *"
     },
     {
       "path": "/api/cron/generate/route.ts",

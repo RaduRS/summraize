@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import DeletePostButton from "./components/DeletePostButton";
+import TestBlogGenerate from "@/app/components/TestBlogGenerate";
 
 export const metadata: Metadata = {
   title: "Blog Admin | Summraize",
@@ -29,6 +30,9 @@ export default async function AdminBlogPage() {
         >
           New Post
         </Link>
+        <div className="mt-4">
+          <TestBlogGenerate />
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
