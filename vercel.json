@@ -2,11 +2,17 @@
   "crons": [
     {
       "path": "/api/blog/generate",
-      "schedule": "0 17 * * *"
+      "schedule": "15 17 * * *",
+      "headers": {
+        "authorization": "@cron_secret"
+      }
     },
     {
       "path": "/api/blog/generate",
-      "schedule": "5 17 * * *"
+      "schedule": "17 17 * * *",
+      "headers": {
+        "authorization": "@cron_secret"
+      }
     }
   ]
 } 
