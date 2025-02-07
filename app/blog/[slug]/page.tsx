@@ -16,10 +16,11 @@ import ChecklistBlock from "../components/ChecklistBlock";
 import CodeBlock from "../components/CodeBlock";
 import ArticleHeader from "../components/ArticleHeader";
 import Quote from "../components/Quote";
-import CaseStudy from "../components/CaseStudy";
+import CaseStudies from "../components/CaseStudy";
 import RelatedArticles from "../components/RelatedArticles";
 import React from "react";
 import Link from "next/link";
+import remarkGfm from "remark-gfm";
 
 interface BlogPost {
   title: string;
@@ -73,7 +74,7 @@ const components = {
   CodeBlock,
   ArticleHeader,
   Quote,
-  CaseStudy,
+  CaseStudies,
   RelatedArticles,
   h1: (props: any) => (
     <h1 className="text-4xl font-bold mb-6 mt-12 text-gray-900" {...props} />
@@ -148,7 +149,7 @@ const components = {
   ),
   img: (props: any) => (
     <img
-      className="rounded-lg shadow-md my-8 mx-auto"
+      className="rounded-lg shadow-md my-8 mx-0 w-full"
       loading="lazy"
       {...props}
     />
@@ -158,24 +159,24 @@ const components = {
     const content = props.children;
 
     // Parse stats block
-    if (typeof content === "string" && content.startsWith("::: stats")) {
+    if (typeof content === "string" && content.includes("::: stats")) {
       try {
         // Extract the stats block content
         const statsMatch = content.match(/::: stats\s*([\s\S]*?)\s*:::/);
         if (statsMatch) {
-          const statsContent = statsMatch[1];
+          const statsContent = statsMatch[1].trim();
+          console.log("Stats content:", statsContent);
 
-          // Parse the title
-          const titleMatch = statsContent.match(/title: "([^"]+)"/);
+          // Parse title
+          const titleMatch = statsContent.match(/title:\s*"([^"]+)"/);
           const title = titleMatch ? titleMatch[1] : "Statistics";
 
-          // Parse the statistics
-          const statsMatches = Array.from(
-            statsContent.matchAll(/value: "([^"]+)"\s+label: "([^"]+)"/g)
-          );
-          const statistics = statsMatches.map((match) => ({
-            value: match[1],
-            label: match[2],
+          // Parse statistics
+          const statistics = Array.from(
+            statsContent.matchAll(/value:\s*"([^"]+)"\s+label:\s*"([^"]+)"/g)
+          ).map(([_, value, label]) => ({
+            value,
+            label,
           }));
 
           if (statistics.length > 0) {
@@ -184,6 +185,11 @@ const components = {
         }
       } catch (error) {
         console.error("Error parsing stats block:", error);
+        return (
+          <p className="text-lg text-gray-600 mb-4 leading-relaxed text-justify">
+            {content}
+          </p>
+        );
       }
     }
 
@@ -336,6 +342,74 @@ export default async function BlogPost({ params }: { params: Params }) {
   const updateDate = new Date(post.updated_at);
   const readingTime = getReadingTime(post.content);
 
+  // Add logging for MDX components
+  const mdxComponents = {
+    ...components,
+    p: (props: any) => {
+      const content = props.children;
+
+      // Parse stats block
+      if (typeof content === "string" && content.includes("::: stats")) {
+        console.log("Found stats block, attempting to parse");
+        try {
+          // Extract the stats block content
+          const statsMatch = content.match(/::: stats\s*([\s\S]*?)\s*:::/);
+
+          if (statsMatch) {
+            const statsContent = statsMatch[1].trim();
+
+            // Parse title
+            const titleMatch = statsContent.match(/title:\s*"([^"]+)"/);
+            const title = titleMatch ? titleMatch[1] : "Statistics";
+
+            // Parse statistics
+            const statistics = Array.from(
+              statsContent.matchAll(/value:\s*"([^"]+)"\s+label:\s*"([^"]+)"/g)
+            ).map(([_, value, label]) => ({
+              value,
+              label,
+            }));
+
+            if (statistics.length > 0) {
+              return <StatsBlock title={title} statistics={statistics} />;
+            }
+          }
+        } catch (error) {
+          console.error("Error parsing stats block:", error);
+          return (
+            <p className="text-lg text-gray-600 mb-4 leading-relaxed text-justify">
+              {content}
+            </p>
+          );
+        }
+      }
+
+      // Handle URL conversion for regular text
+      if (typeof content === "string") {
+        return (
+          <p className="text-lg text-gray-600 mb-4 leading-relaxed text-justify">
+            <AutoLinkText>{content}</AutoLinkText>
+          </p>
+        );
+      }
+
+      return (
+        <p
+          className="text-lg text-gray-600 mb-4 leading-relaxed text-justify"
+          {...props}
+        />
+      );
+    },
+    // Add special handling for quotes with apostrophes
+    Quote: (props: any) => {
+      const sanitizedProps = {
+        ...props,
+        text: props.text?.replace(/'/g, "'").replace(/"/g, '"'),
+      };
+      return <Quote {...sanitizedProps} />;
+    },
+  };
+
   return (
     <article className="container mx-auto max-w-4xl w-full px-6 py-16">
       {/* Breadcrumb */}
@@ -462,7 +536,18 @@ export default async function BlogPost({ params }: { params: Params }) {
       )}
 
       <div className="prose prose-lg max-w-none leading-relaxed">
-        <MDXRemote source={post.content} components={components} />
+        <MDXRemote
+          source={post.content}
+          components={mdxComponents}
+          options={{
+            mdxOptions: {
+              remarkPlugins: [remarkGfm],
+              format: "mdx",
+              development: false,
+              useDynamicImport: true,
+            },
+          }}
+        />
       </div>
 
       <script

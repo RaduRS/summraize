@@ -48,6 +48,11 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     };
 
+    console.log("Received POST request data:", {
+      ...createData,
+      content: createData.content.substring(0, 500) + "...", // Log first 500 chars
+    });
+
     const { data, error } = await supabase
       .from("blog_posts")
       .insert(createData)
@@ -100,6 +105,36 @@ export async function GET(request: Request) {
     console.error("Error in get posts API:", error);
     return NextResponse.json(
       { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const supabase = await createClient();
+    const data = await request.json();
+
+    console.log("Received PUT request data:", {
+      ...data,
+      content: data.content.substring(0, 500) + "...", // Log first 500 chars
+    });
+
+    const { error } = await supabase
+      .from("blog_posts")
+      .update(data)
+      .eq("slug", data.slug);
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error in PUT /api/admin/posts:", error);
+    return NextResponse.json(
+      { error: "Failed to update post" },
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import RelatedArticleSelector from "./RelatedArticleSelector";
+import SimpleImageCarousel from "@/app/components/SimpleImageCarousel";
 import ReactDOM from "react-dom/client";
 import {
   Select,
@@ -99,7 +100,13 @@ export default function BlogPostForm({
         newBlock = "\n![Image description](image-url)\n";
         break;
       case "stats":
-        newBlock = '\n::: stats\nvalue: "85%"\nlabel: "Accuracy Rate"\n:::\n';
+        newBlock = `
+::: stats
+title: "Statistics Title"
+value: "85%" label: "First Statistic"
+value: "50%" label: "Second Statistic"
+:::
+`;
         break;
       case "checklist":
         newBlock = "\n- [ ] Task 1\n- [ ] Task 2\n- [x] Completed task\n";
@@ -109,22 +116,29 @@ export default function BlogPostForm({
           '\n<ArticleHeader\n  title="Section Title"\n  subtitle="Optional subtitle text"\n/>\n';
         break;
       case "quote":
-        newBlock =
-          '\n<Quote\n  text="Your quote text here"\n  author="Author Name"\n  role="Author Role"\n/>\n';
+        newBlock = `<Quote text={"Your quote text here"} author="Author Name" role="Author Role"/>`;
         break;
       case "case-study":
-        newBlock = `
-<CaseStudy
-  title="Case Study Title"
-  challenge="Describe the challenge here"
-  solution="Explain the solution here"
-  results={[
-    "Key result 1",
-    "Key result 2",
-    "Key result 3"
-  ]}
-/>
-`;
+        newBlock = `<CaseStudies studies={[
+  {
+    title: "Amazon",
+    challenge: "Inventory management",
+    solution: "AI algorithms for demand forecasting",
+    results: [
+      "Reduced stockouts by 30%",
+      "Increased inventory turnover by 15%"
+    ]
+  },
+  {
+    title: "Netflix",
+    challenge: "Content recommendation",
+    solution: "AI-driven recommendation engine",
+    results: [
+      "Increased viewer retention by 80%",
+      "Enhanced user satisfaction"
+    ]
+  }
+]}/>`;
         break;
       case "related-articles":
         setShowBlockMenu(false);
@@ -202,6 +216,11 @@ export default function BlogPostForm({
             : AUTHORS.find((a) => a.id === selectedAuthor)?.name,
       };
 
+      console.log("Submitting blog post data:", {
+        ...postData,
+        content: postData.content.substring(0, 500) + "...", // Log first 500 chars of content
+      });
+
       const res = await fetch(url, {
         method,
         headers: {
@@ -215,6 +234,9 @@ export default function BlogPostForm({
         throw new Error(error.error || "Something went wrong");
       }
 
+      const responseData = await res.json();
+      console.log("Response from server:", responseData);
+
       // Revalidate the blog routes
       await Promise.all([
         fetch("/api/revalidate?path=/blog", { method: "GET" }),
@@ -224,6 +246,7 @@ export default function BlogPostForm({
       router.push("/admin/blog");
       router.refresh();
     } catch (error) {
+      console.error("Error submitting blog post:", error);
       alert(error instanceof Error ? error.message : "Failed to save post");
     } finally {
       setIsLoading(false);
@@ -281,6 +304,18 @@ export default function BlogPostForm({
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-gray-700">
+          Image Selector
+        </label>
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <SimpleImageCarousel />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="slug"
+          className="block text-sm font-medium text-gray-700"
+        >
           URL Slug (auto-generated)
         </label>
         <div className="block w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50 font-mono text-sm text-gray-600">

@@ -22,6 +22,9 @@ export default async function AdminBlogPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <TestBlogGenerate />
+      </div>
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Blog Posts Admin</h1>
         <Link
@@ -30,9 +33,6 @@ export default async function AdminBlogPage() {
         >
           New Post
         </Link>
-        <div className="mt-4">
-          <TestBlogGenerate />
-        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">

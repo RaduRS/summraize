@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import OpenAI from "openai";
+import { BLOG_IDEAS } from "@/constants/blogIdeas";
 
 export const runtime = "edge";
 export const preferredRegion = "auto";
@@ -17,27 +18,229 @@ function log(message: string, data?: any) {
   console.log(`[Blog Generator] ${message}`, data ? JSON.stringify(data) : "");
 }
 
-const BLOG_PROMPT = `Create a concise blog post about AI or productivity tools. Format:
+// Get today's blog topic
+function getTodaysBlogIdea() {
+  const today = new Date().toISOString().split("T")[0];
+  const blogIdea = BLOG_IDEAS.find((idea) => idea.date === today);
 
-{
-  "title": "Brief, engaging title",
-  "slug": "url-friendly-version-of-title",
-  "content": "## Introduction\\n[2-3 sentences intro]\\n\\n## Main Points\\n- Point 1\\n- Point 2\\n- Point 3\\n\\n## Conclusion\\n[1-2 sentences wrap-up]",
-  "excerpt": "One sentence summary",
-  "date": "${new Date().toISOString()}",
-  "author_name": "Radu R",
-  "cover_image": null,
-  "image_caption": null
+  if (!blogIdea) {
+    throw new Error("No blog topic found for today");
+  }
+
+  return blogIdea;
 }
 
-Keep content focused and under 1000 words. Use markdown formatting.`;
+const BLOG_PROMPT = `You are an expert **blog post generator** specializing in creating engaging, well-researched content. Your task is to create a **long-form, fact-based, and SEO-optimized** article based on the following topic:
 
-export async function GET(request: Request) {
+**Topic:** {TOPIC}
+
+**Target Audience:** {AUDIENCE}
+
+**Description:** {DESCRIPTION}
+
+**IMPORTANT:**  
+✅ **All facts, statistics, and quotes must be REAL.**  
+✅ **Research online and reference credible sources** (McKinsey, Harvard, Forbes, industry leaders).  
+✅ **Do not fabricate data. If unsure, find the latest stats online.**  
+✅ **Ensure every generated post is unique and not repetitive.**  
+
+---
+
+## **Content Requirements:**
+- **At least 2000 words** (well-researched, engaging, and insightful).  
+- **Use Markdown formatting** with proper structure.  
+- **Include multiple sections with real-world insights.**  
+- **Use the images provided in the optionalImages array.**  
+- **Do NOT use placeholder examples—generate fresh, unique content every time.**  
+
+### **Mandatory Sections & Elements:**
+The article **must** follow these EXACT formatting rules to ensure MDX compatibility:
+
+1️⃣ **Article Headers:**  
+   - Use \`<ArticleHeader>\` for every major section.
+   - Format: \`<ArticleHeader title="Section Title" subtitle="Optional Subtitle"/>\`
+   - ALWAYS use double quotes (") for props, never single quotes
+   - Do NOT combine with markdown headings (##)
+   - Example:
+     \`\`\`
+     <ArticleHeader title="Introduction" subtitle="The Future of Work"/>
+     Content goes here...
+     \`\`\`
+
+2️⃣ **Quotes from Experts:**  
+   - Use \`<Quote>\` component with text, author, and role props
+   - ALWAYS use double quotes (") for all props
+   - Real quotes from experts, not placeholder examples
+   - Format: \`<Quote text="Quote text here" author="Author Name" role="Author Role"/>\`
+   - Example:
+     \`<Quote text="AI is transforming how we work" author="Satya Nadella" role="CEO, Microsoft"/>\`
+
+3️⃣ **Statistics Block:**
+   - Use the \`::: stats\` block with simple key-value format
+   - NO JSON format, use simple key-value pairs
+   - Format:
+     \`\`\`
+     ::: stats
+     title: "Statistics Title"
+     value: "95%" label: "First Stat Label"
+     value: "40%" label: "Second Stat Label"
+     :::
+     \`\`\`
+     Exemple:
+        ::: stats
+     title: "AI Impact on Productivity"
+     value: "40%" label: "Potential Increase in Productivity"
+     value: "70%" label: "Cost Reduction with AI"
+     :::
+
+4️⃣ **Case Studies:**
+   - Use the \`<CaseStudies>\` component with an array of studies
+   - Can include either one or two case studies
+   - For a single case study:
+     \`\`\`
+     <CaseStudies studies={[
+       {
+         title: "Company Name",
+         challenge: "Brief description of the challenge",
+         solution: "Brief description of the solution",
+         results: [
+           "First measurable result with percentage",
+           "Second measurable result"
+         ]
+       }
+     ]}/>
+     \`\`\`
+   - For two case studies (preferred when comparing approaches):
+     \`\`\`
+     <CaseStudies studies={[
+       {
+         title: "First Company",
+         challenge: "First challenge description",
+         solution: "First solution approach",
+         results: [
+           "First company result 1",
+           "First company result 2"
+         ]
+       },
+       {
+         title: "Second Company",
+         challenge: "Second challenge description",
+         solution: "Second solution approach",
+         results: [
+           "Second company result 1",
+           "Second company result 2"
+         ]
+       }
+     ]}/>
+     \`\`\`
+   - ALWAYS use real companies and verifiable results
+   - Keep challenges and solutions concise but specific
+   - Include 2-3 measurable results per case study
+   - When possible, use two complementary case studies to show different applications
+
+5️⃣ **Images:**  
+   - Use standard markdown format
+   - Format:
+     \`\`\`
+     ![Alt Text](image-url-provided-in-optionalImages)
+     \`\`\`
+
+❗ **CRITICAL FORMATTING RULES:**
+- Use double quotes (") for all component props
+- Avoid apostrophes in text when possible
+- Remove trailing spaces in JSON blocks
+- Keep exact spacing in stats block
+- NEVER mix markdown headings (##, ###) with components
+- NEVER put any image at the end of the article
+- NEVER put one image after another without some content in between
+- Each major section should ONLY use <ArticleHeader>, not markdown headings
+- Place components on their own lines, not nested under headings
+- Test all generated content for MDX compatibility
+
+**CORRECT Structure Example:**
+\`\`\`
+<ArticleHeader title="Introduction" subtitle="The Future of Work"/>
+Content goes here...
+
+<ArticleHeader title="Key Benefits" subtitle="How AI Helps"/>
+More content...
+
+<Quote text="The quote here" author="Author Name" role="Role Here"/>
+\`\`\`
+
+**INCORRECT Structure (DO NOT USE):**
+\`\`\`
+### <ArticleHeader title="Introduction" subtitle="The Future of Work"/>
+Content...
+
+\`\`\`
+
+---
+
+## **What the AI Must Do:**
+- **Fetch real, latest industry insights** (do NOT reuse old or generic content).  
+- **Ensure facts, quotes, and sources are 100% verifiable** (include reference links if necessary).  
+- **Generate content that is truly unique each time**—avoid repeating structures or case studies.  
+- **Format the response correctly in Markdown and JSON.**  
+
+---
+
+## **Output Structure:**
+Return a JSON object in this format:
+
+{
+  "title": "Engaging, SEO-Optimized Title",
+  "slug": "The slug must be a URL-friendly version of the title followed by a 6-digit timestamp. Convert the title to lowercase, remove special characters, replace spaces with hyphens, and append a dash followed by the last 6 digits of the current timestamp. Example: 'my-blog-post-123456'",
+  "content": "Markdown-formatted content including headers, quotes, stats, checklists, and images",
+  "excerpt": "One-sentence summary optimized for SEO and social media.",
+  "date": "${new Date().toISOString()}",
+  "author_name": "Radu R",
+  "cover_image": "Use the image provided as coverImage",
+}
+
+---
+`;
+
+export async function POST(request: Request) {
   try {
     log("Starting blog post generation");
 
+    const { coverImage, optionalImages = [] } = await request.json();
+
+    if (!coverImage) {
+      return NextResponse.json(
+        { success: false, message: "Cover image URL is required" },
+        { status: 400 }
+      );
+    }
+
+    // Get today's blog idea
+    const blogIdea = getTodaysBlogIdea();
+    log("Retrieved blog idea for today", blogIdea);
+
     const supabase = await createClient();
     log("Supabase client created");
+
+    // Generate a 6-digit timestamp for the slug
+    const timestamp = Date.now().toString().slice(-6);
+    log("Generated timestamp for slug:", timestamp);
+
+    // Create the prompt with today's topic
+    const finalPrompt = BLOG_PROMPT.replace("{TOPIC}", blogIdea.topic)
+      .replace("{AUDIENCE}", blogIdea.audience)
+      .replace("{DESCRIPTION}", blogIdea.description);
+
+    // Add optional images to the prompt
+    const promptWithImages =
+      finalPrompt +
+      `
+**Images:**  \n   - Use these provided image URLs in markdown format where appropriate:\n${
+        optionalImages.length > 0
+          ? optionalImages
+              .map((url: string) => `   - ![AI and Productivity](${url})`)
+              .join("\n")
+          : "   - No additional images provided"
+      }`;
 
     // Generate blog post using OpenAI
     log("Calling OpenAI API");
@@ -47,15 +250,15 @@ export async function GET(request: Request) {
         {
           role: "system",
           content:
-            "You are a professional blog post generator. You create high-quality, engaging content. Create focused content in valid JSON format.",
+            "You are a professional blog post generator. You create well-researched, fact-based, SEO-optimized content using real data. Focus on incorporating real-world case studies from major companies, using verifiable results and metrics.",
         },
         {
           role: "user",
-          content: BLOG_PROMPT,
+          content: promptWithImages,
         },
       ],
       temperature: 0.7,
-      max_tokens: 2048, // Reduced from 4096
+      max_tokens: 4096,
       response_format: { type: "json_object" },
     });
 
@@ -66,6 +269,20 @@ export async function GET(request: Request) {
 
     log("Successfully received response from OpenAI");
     const generatedPost = JSON.parse(completion.choices[0].message.content);
+
+    // Override the cover_image with the provided one
+    generatedPost.cover_image = coverImage;
+
+    // Create a shorter slug from the first 5 words of the title plus timestamp
+    const shortSlug = generatedPost.title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(" ")
+      .slice(0, 5)
+      .join("-")
+      .concat(`-${timestamp}`);
+
+    generatedPost.slug = shortSlug;
 
     // Validate the generated post structure
     const requiredFields = ["title", "slug", "content", "date"];
