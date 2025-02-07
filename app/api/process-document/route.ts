@@ -48,7 +48,7 @@ async function extractTextFromImage(buffer: Buffer): Promise<string> {
           ],
         },
       ],
-      max_tokens: 4096,
+      max_tokens: 8192,
     });
 
     if (!response.choices[0]?.message?.content) {

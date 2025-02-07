@@ -79,7 +79,7 @@ Now transform this input while following these rules:`,
           },
         ],
         temperature: temperature,
-        max_tokens: 4096,
+        max_tokens: 8192,
       }),
       signal: controller.signal,
     });
@@ -158,7 +158,7 @@ Now transform this input while following these rules:`,
         },
       ],
       temperature: temperature,
-      max_tokens: 4096,
+      max_tokens: 8192,
     });
 
     if (!completion.choices[0]?.message?.content) {

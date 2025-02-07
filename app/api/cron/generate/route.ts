@@ -257,8 +257,8 @@ export async function POST(request: Request) {
           content: promptWithImages,
         },
       ],
-      temperature: 0.7,
-      max_tokens: 4096,
+      temperature: 0.6,
+      max_tokens: 8192,
       response_format: { type: "json_object" },
     });
 
