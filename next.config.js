@@ -52,6 +52,16 @@ const nextConfig = {
   experimental: {
     serverActions: true,
   },
+  images: {
+    domains: ["images.unsplash.com"], // ✅ Add Unsplash as an allowed image source
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
+    ],
+  },
   webpack: (config) => {
     config.resolve.alias.canvas = false;
     config.resolve.fallback = {

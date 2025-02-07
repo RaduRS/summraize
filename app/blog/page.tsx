@@ -2,9 +2,12 @@ import { Metadata } from "next";
 import { getPosts, BlogPost } from "../lib/blog";
 import { Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Clock } from "lucide-react";
+import { useEffect } from "react";
+import ScrollToTop from "./components/ScrollToTop";
 
-export const revalidate = 0; // Disable caching for this route
+export const revalidate = 60; // Change to 60 seconds for better caching
 
 export const metadata: Metadata = {
   title: "Blog | Summraize - AI Document Processing Insights",
@@ -84,17 +87,20 @@ async function BlogPosts() {
           <Link
             href={`/blog/${post.slug}`}
             key={post.slug}
+            prefetch={true}
+            scroll={true}
             className="group relative flex flex-col border rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-white h-full transform hover:-translate-y-1"
           >
             <div className="relative h-48 overflow-hidden">
               {post.cover_image ? (
-                <img
+                <Image
                   src={post.cover_image}
                   alt={post.title}
-                  className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-200"
-                  width={400}
-                  height={200}
-                  loading="lazy"
+                  className="object-cover transform group-hover:scale-105 transition-transform duration-200"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  priority
+                  loading="eager"
                 />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center">
@@ -149,6 +155,7 @@ async function BlogPosts() {
 export default function BlogPage() {
   return (
     <div className="container mx-auto max-w-6xl w-full px-5 py-16">
+      <ScrollToTop />
       <h1 className="text-4xl font-bold mb-8">Latest Articles</h1>
       <Suspense
         fallback={

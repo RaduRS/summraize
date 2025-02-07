@@ -40,6 +40,8 @@ export function Footer() {
                 </Link>
                 <Link
                   href="/blog"
+                  prefetch={true}
+                  scroll={true}
                   className="text-sm text-muted-foreground hover:text-primary flex items-center gap-2"
                 >
                   <Newspaper className="h-4 w-4" />

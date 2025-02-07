@@ -9,9 +9,12 @@ export async function GET() {
 
     const { data: posts, error } = await supabase
       .from("blog_posts")
-      .select("*")
+      .select(
+        "id, slug, title, excerpt, content, cover_image, date, author_name, published"
+      )
       .eq("published", true)
-      .order("date", { ascending: false });
+      .order("date", { ascending: false })
+      .returns<any>();
 
     if (error) {
       console.error("Error fetching blog posts:", error);
@@ -21,12 +24,15 @@ export async function GET() {
       );
     }
 
-    // Add cache headers
+    // Add comprehensive cache headers for better performance
     const response = NextResponse.json(posts);
     response.headers.set(
       "Cache-Control",
       "public, s-maxage=60, stale-while-revalidate=300"
     );
+    response.headers.set("CDN-Cache-Control", "public, max-age=60");
+    response.headers.set("Vercel-CDN-Cache-Control", "public, max-age=60");
+    response.headers.set("X-Content-Type-Options", "nosniff");
 
     return response;
   } catch (error) {
