@@ -65,17 +65,19 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     try {
-      if (PROTECTED_PATHS.includes(pathname)) {
-        await router.replace("/");
-      }
+      // First sign out from Supabase
+      await supabase.auth.signOut();
+
+      // Update local state
       setIsAuthenticated(false);
       setUser(null);
-      await supabase.auth.signOut();
-      router.refresh();
+
+      // Use window.location for navigation
+      window.location.href = "/";
     } catch (error) {
       console.error("Sign out error:", error);
     }
-  }, [supabase, router, pathname]);
+  }, [supabase]);
 
   const refreshCredits = async () => {
     if (!user) return;

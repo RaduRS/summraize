@@ -597,20 +597,41 @@ export default function VoiceAssistant() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 30 * 1024 * 1024) {
-      alert("File size must be less than 10MB");
+    // Increase size limit for iOS devices which typically have larger file sizes
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      toast({
+        title: "File too large",
+        description: "Please upload an audio file smaller than 50MB",
+        variant: "destructive",
+      });
       return;
     }
 
-    if (!file.type.startsWith("audio/")) {
-      alert("Please upload an audio file");
+    // Support more audio formats for iOS
+    const supportedTypes = [
+      "audio/wav",
+      "audio/mpeg",
+      "audio/mp4",
+      "audio/x-m4a",
+      "audio/aac",
+      "audio/*",
+    ];
+
+    if (
+      !supportedTypes.includes(file.type) &&
+      !file.type.startsWith("audio/")
+    ) {
+      toast({
+        title: "Unsupported file type",
+        description: "Please upload a valid audio file",
+        variant: "destructive",
+      });
       return;
     }
 
     // Clear existing state
     clearVoiceAssistantState();
-
-    // Clear all state variables
     setAudioBlob(null);
     setResult(null);
     setPartialTranscript("");
@@ -1192,7 +1213,8 @@ export default function VoiceAssistant() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="audio/*"
+                accept="audio/*,audio/wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac"
+                capture="user"
                 onChange={handleFileUpload}
                 className="hidden"
               />
