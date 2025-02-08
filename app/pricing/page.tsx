@@ -91,7 +91,7 @@ const packages = [
       "~110 minutes of audio transcription",
       "~12 million words of text-to-speech",
       "~15 document pages processing",
-      "~10 images scanned for text (OCR)",
+      "~100 images scanned for text (OCR)",
     ],
   },
   {
@@ -104,7 +104,7 @@ const packages = [
       "~275 minutes of audio transcription",
       "~30 million words of text-to-speech",
       "~40 document pages processing",
-      "~25 images scanned for text (OCR)",
+      "~250 images scanned for text (OCR)",
     ],
   },
   {
@@ -117,7 +117,7 @@ const packages = [
       "~550 minutes of audio transcription",
       "~60 million words of text-to-speech",
       "~80 document pages processing",
-      "~50 images scanned for text (OCR)",
+      "~500 images scanned for text (OCR)",
     ],
   },
   {
@@ -130,7 +130,7 @@ const packages = [
       "~1,100 minutes of audio transcription",
       "~120 million words of text-to-speech",
       "~160 document pages processing",
-      "~100 images scanned for text (OCR)",
+      "~1,000 images scanned for text (OCR)",
     ],
   },
   {
@@ -143,7 +143,7 @@ const packages = [
       "~2,750 minutes of audio transcription",
       "~300 million words of text-to-speech",
       "~400 document pages processing",
-      "~250 images scanned for text (OCR)",
+      "~2,500 images scanned for text (OCR)",
     ],
   },
   {
@@ -156,7 +156,7 @@ const packages = [
       "~5,500 minutes of audio transcription",
       "~600 million words of text-to-speech",
       "~800 document pages processing",
-      "~500 images scanned for text (OCR)",
+      "~5,000 images scanned for text (OCR)",
     ],
   },
 ];
