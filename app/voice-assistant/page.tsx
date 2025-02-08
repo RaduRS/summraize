@@ -1214,7 +1214,6 @@ export default function VoiceAssistant() {
                 ref={fileInputRef}
                 type="file"
                 accept="audio/*,audio/wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac"
-                capture="user"
                 onChange={handleFileUpload}
                 className="hidden"
               />
