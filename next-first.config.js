@@ -7,12 +7,16 @@ let serverPort = 3000;
 
 async function fetchBlogPosts() {
   try {
-    console.log(`\n📡 Fetching blog posts from API (port ${serverPort})...`);
+    // Determine if we're in production or development
+    const isDevelopment = process.env.NODE_ENV !== "production";
+    const baseUrl = isDevelopment
+      ? `http://localhost:${serverPort}`
+      : "https://www.summraize.com";
 
-    // Use the detected port
-    const response = await fetch(
-      `http://localhost:${serverPort}/api/blog/posts`
-    );
+    console.log(`\n📡 Fetching blog posts from API (${baseUrl})...`);
+
+    // Use the appropriate URL based on environment
+    const response = await fetch(`${baseUrl}/api/blog/posts`);
 
     if (!response.ok) {
       throw new Error(
@@ -71,10 +75,14 @@ async function fetchBlogPosts() {
     });
     console.error("\nPlease check:");
     console.error(
-      `1. Make sure your development server is running on port ${serverPort}`
+      isDevelopment
+        ? `1. Make sure your development server is running on port ${serverPort}`
+        : "1. Make sure your production server is accessible"
     );
     console.error(
-      `2. The API endpoint is accessible at http://localhost:${serverPort}/api/blog/posts`
+      isDevelopment
+        ? `2. The API endpoint is accessible at http://localhost:${serverPort}/api/blog/posts`
+        : "2. The API endpoint is accessible at https://www.summraize.com/api/blog/posts"
     );
     console.error("3. Check if the API response contains valid date formats");
     console.error("\nExiting with error...\n");
@@ -82,51 +90,60 @@ async function fetchBlogPosts() {
   }
 }
 
-// Start dev server in a separate process
-console.log("🚀 Starting development server...");
-const devServer = spawn("npm", ["run", "dev"], {
-  stdio: "pipe",
-  detached: true,
-});
+// Only start dev server if we're in development
+if (process.env.NODE_ENV !== "production") {
+  console.log("🚀 Starting development server...");
+  const devServer = spawn("npm", ["run", "dev"], {
+    stdio: "pipe",
+    detached: true,
+  });
 
-// Listen for server output to know when it's ready
-devServer.stdout.on("data", (data) => {
-  const output = data.toString();
+  // Listen for server output to know when it's ready
+  devServer.stdout.on("data", (data) => {
+    const output = data.toString();
 
-  // Detect port changes
-  const portMatch = output.match(/Port (\d+) is in use, trying (\d+) instead/);
-  if (portMatch) {
-    serverPort = parseInt(portMatch[2], 10);
-    console.log(`📝 Server will use port ${serverPort}`);
-  }
+    // Detect port changes
+    const portMatch = output.match(
+      /Port (\d+) is in use, trying (\d+) instead/
+    );
+    if (portMatch) {
+      serverPort = parseInt(portMatch[2], 10);
+      console.log(`📝 Server will use port ${serverPort}`);
+    }
 
-  // Wait for server ready message
-  if (output.includes("- Local:")) {
-    console.log("✅ Development server is ready");
-    // Wait a bit more to ensure the API is fully initialized
-    setTimeout(() => {
-      fetchBlogPosts().finally(() => {
-        // Kill the dev server process and its children
-        process.kill(-devServer.pid);
-      });
-    }, 2000);
-  }
-});
+    // Wait for server ready message
+    if (output.includes("- Local:")) {
+      console.log("✅ Development server is ready");
+      // Wait a bit more to ensure the API is fully initialized
+      setTimeout(() => {
+        fetchBlogPosts().finally(() => {
+          // Kill the dev server process and its children
+          process.kill(-devServer.pid);
+        });
+      }, 2000);
+    }
+  });
 
-// Handle server errors
-devServer.stderr.on("data", (data) => {
-  const output = data.toString();
-  console.error(`Dev server error: ${output}`);
+  // Handle server errors
+  devServer.stderr.on("data", (data) => {
+    const output = data.toString();
+    console.error(`Dev server error: ${output}`);
 
-  // Also check for port changes in stderr
-  const portMatch = output.match(/Port (\d+) is in use, trying (\d+) instead/);
-  if (portMatch) {
-    serverPort = parseInt(portMatch[2], 10);
-    console.log(`📝 Server will use port ${serverPort}`);
-  }
-});
+    // Also check for port changes in stderr
+    const portMatch = output.match(
+      /Port (\d+) is in use, trying (\d+) instead/
+    );
+    if (portMatch) {
+      serverPort = parseInt(portMatch[2], 10);
+      console.log(`📝 Server will use port ${serverPort}`);
+    }
+  });
 
-devServer.on("error", (error) => {
-  console.error("Failed to start dev server:", error);
-  process.exit(1);
-});
+  devServer.on("error", (error) => {
+    console.error("Failed to start dev server:", error);
+    process.exit(1);
+  });
+} else {
+  // In production, just run fetchBlogPosts directly
+  fetchBlogPosts();
+}
