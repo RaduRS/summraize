@@ -206,19 +206,19 @@ export default function RootLayout({
         <PostHogProvider />
         <Hotjar />
         <SpeedInsights />
-        <ThemeProvider
+        {/* <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
-        >
-          <div className="relative flex min-h-screen flex-col">
-            <Nav />
-            <main className="flex-1 mt-16">{children}</main>
-            <Footer />
-          </div>
-          <Toaster />
-        </ThemeProvider>
+        > */}
+        <div className="relative flex min-h-screen flex-col">
+          <Nav />
+          <main className="flex-1 mt-16">{children}</main>
+          <Footer />
+        </div>
+        <Toaster />
+        {/* </ThemeProvider> */}
         <CookieConsent />
       </body>
     </html>

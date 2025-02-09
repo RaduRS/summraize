@@ -21,6 +21,7 @@ import RelatedArticles from "../components/RelatedArticles";
 import React from "react";
 import Link from "next/link";
 import remarkGfm from "remark-gfm";
+import Breadcrumb from "../../components/Breadcrumb";
 
 interface BlogPost {
   title: string;
@@ -342,6 +343,12 @@ export default async function BlogPost({ params }: { params: Params }) {
   const updateDate = new Date(post.updated_at);
   const readingTime = getReadingTime(post.content);
 
+  const breadcrumbItems = [
+    { label: "Home", href: "/" },
+    { label: "Blog", href: "/blog" },
+    { label: post.title, href: `/blog/${post.slug}` },
+  ];
+
   // Add logging for MDX components
   const mdxComponents = {
     ...components,
@@ -412,22 +419,7 @@ export default async function BlogPost({ params }: { params: Params }) {
 
   return (
     <article className="container mx-auto max-w-4xl w-full px-6 py-16">
-      {/* Breadcrumb */}
-      <nav className="flex items-center space-x-2 mb-8 text-sm flex-row justify-between">
-        <Link
-          href="/blog"
-          className="text-gray-500 hover:text-gray-700 flex items-center gap-1 group"
-        >
-          <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-          Back to Blog
-        </Link>
-        <div className="flex items-center gap-4 text-gray-600">
-          <div className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            <span>{readingTime} min read</span>
-          </div>
-        </div>
-      </nav>
+      <Breadcrumb items={breadcrumbItems} />
 
       <header className="mb-12">
         <h1 className="text-4xl font-bold mb-6">{post.title}</h1>
@@ -440,33 +432,39 @@ export default async function BlogPost({ params }: { params: Params }) {
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-6 border-t border-b">
           {/* Author Info with Icon */}
-          <div className="flex items-center mb-4 md:mb-0">
+          <div className="flex items-center mb-2 md:mb-0">
             {post.updated_at && (
               <div className="flex items-center">
-                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mr-4">
+                <div className="relative top-4 md:top-0 w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mr-4">
                   <User2 className="w-6 h-6 text-gray-500" />
                 </div>
-                <div>
+                <div className="flex flex-col gap-1 md:gap-0">
                   <div className="text-gray-900 font-medium">
                     {post.author_name}
                   </div>
-                  <time
-                    className="text-sm text-gray-500"
-                    dateTime={updateDate.toISOString()}
-                  >
-                    {updateDate.toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </time>
+                  <div className="text-sm text-gray-500 gap-2 flex items-center">
+                    <time dateTime={updateDate.toISOString()}>
+                      {updateDate.toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </time>
+                    <span>|</span>
+                    <div className="flex items-center justify-end">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        <span>{readingTime} min read</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
           {/* Share Links */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 ml-16 md:ml-0">
             <a
               href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(
                 `https://summraize.com/blog/${formatUrl(post.slug)}`

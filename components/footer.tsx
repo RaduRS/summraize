@@ -113,9 +113,9 @@ export function Footer() {
               <h3 className="text-sm font-semibold mb-4">Settings & Info</h3>
               <div className="flex flex-col items-center md:items-start space-y-3">
                 <div className="flex items-center gap-4">
-                  <ThemeSwitcher />
+                  {/* <ThemeSwitcher /> */}
                 </div>
-                <p className="text-xs text-muted-foreground max-w-xs">
+                <p className="text-xs text-muted-foreground max-w-xs !mt-0">
                   <span className="font-bold">
                     summr
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
