@@ -62,7 +62,7 @@ export function Features() {
 
   return (
     <section className="w-full py-12 sm:py-20 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm relative">
-      <BackgroundDecorations variant="dots" />
+      <BackgroundDecorations variant="particles" />
       <div className="relative w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           ref={headerRef}

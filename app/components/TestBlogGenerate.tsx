@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ImageCarousel from "./ImageCarousel";
+import { BLOG_IDEAS } from "@/constants/blogIdeas";
 
 export default function TestBlogGenerate() {
   const [isLoading, setIsLoading] = useState(false);
@@ -11,6 +12,11 @@ export default function TestBlogGenerate() {
   const [selectedImages, setSelectedImages] = useState<{
     [key: number]: string;
   }>({});
+
+  // Get today's blog idea
+  const today = new Date().toISOString().split("T")[0];
+  const todaysBlogIdea =
+    BLOG_IDEAS.find((idea) => idea.date === today) || BLOG_IDEAS[0];
 
   const handleOptionalImageChange = (index: number, value: string) => {
     setOptionalImages((prev) => {
@@ -87,6 +93,19 @@ export default function TestBlogGenerate() {
 
   return (
     <div className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+      <div className="mb-6 bg-blue-50 p-4 rounded-lg">
+        <h3 className="text-lg font-semibold text-blue-900 mb-2">
+          Today's Blog Topic
+        </h3>
+        <div className="space-y-2">
+          <p className="text-blue-800 font-medium">{todaysBlogIdea.topic}</p>
+          <p className="text-sm text-blue-700">
+            Target Audience: {todaysBlogIdea.audience}
+          </p>
+          <p className="text-sm text-blue-600">{todaysBlogIdea.description}</p>
+        </div>
+      </div>
+
       <div className="space-y-4">
         <h2 className="text-lg font-medium text-gray-900">Select Images</h2>
         <ImageCarousel

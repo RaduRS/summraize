@@ -29,7 +29,6 @@ export default function Home() {
 
       {/* Main Features - Clean white background */}
       <div className="relative">
-        <BackgroundDecorations variant="dots" />
         <Features />
       </div>
 
@@ -116,9 +115,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* User Profiles - White background with dots */}
+      {/* User Profiles - White background with particles */}
       <section className="w-full relative bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-        <BackgroundDecorations variant="clean" />
         <UserProfiles />
       </section>
 
@@ -130,7 +128,7 @@ export default function Home() {
 
       {/* Final CTA Section - Clean white background with subtle animation */}
       <section className="w-full relative py-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm">
-        <BackgroundDecorations variant="dots" />
+        <BackgroundDecorations variant="particles" />
         <div className="relative w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             ref={ctaRef}

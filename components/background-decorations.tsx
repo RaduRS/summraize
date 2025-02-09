@@ -1,12 +1,28 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useTheme } from "next-themes";
+// import { Particles } from "@/components/ui/particles";
+import { useEffect, useState } from "react";
+import { Particles } from "./ui/particles";
 
 export function BackgroundDecorations({
   variant = "default",
 }: {
-  variant?: "default" | "gradient-left" | "gradient-right" | "dots" | "clean";
+  variant?:
+    | "default"
+    | "gradient-left"
+    | "gradient-right"
+    | "particles"
+    | "clean";
 }) {
+  const { theme } = useTheme();
+  const [color, setColor] = useState("#000000");
+
+  useEffect(() => {
+    setColor(theme === "dark" ? "#ffffff" : "#000000");
+  }, [theme]);
+
   const renderLines = (position: "left" | "right") => (
     <div
       className={`absolute inset-y-0 ${position}-0 flex gap-4 ${
@@ -61,52 +77,18 @@ export function BackgroundDecorations({
     );
   }
 
-  if (variant === "dots") {
-    const lineHeights = [10, 16, 24, 8, 18, 12, 22, 14, 20, 6];
-    const skipPositions = [3, 9, 14, 20, 26, 31, 37];
-
+  if (variant === "particles") {
     return (
       <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div
-            className="flex flex-col gap-6"
-            style={{
-              position: "absolute",
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "4000px",
-            }}
-          >
-            {[...Array(50)].map((_, row) => (
-              <div
-                key={row}
-                className="flex gap-6"
-                style={{
-                  marginLeft: row % 2 === 0 ? "24px" : "36px",
-                  width: "100%",
-                }}
-              >
-                {[...Array(300)].map((_, i) => {
-                  const shouldHide = skipPositions.some((pos) => i % pos === 0);
-                  const height = lineHeights[i % lineHeights.length];
-                  const isEven = i % 2 === 0;
-
-                  return !shouldHide ? (
-                    <div
-                      key={i}
-                      style={{
-                        width: "1px",
-                        height: `${height}px`,
-                        background: isEven
-                          ? "linear-gradient(to bottom, transparent, rgb(34 211 238 / 0.2) 50%, transparent)"
-                          : "linear-gradient(to bottom, transparent, rgb(168 85 247 / 0.15) 50%, transparent)",
-                      }}
-                    />
-                  ) : null;
-                })}
-              </div>
-            ))}
-          </div>
+        <div className="absolute inset-0 bg-white dark:bg-gray-950">
+          <Particles
+            className="absolute inset-0"
+            quantity={100}
+            staticity={50}
+            ease={50}
+            color={color}
+            refresh={false}
+          />
         </div>
       </div>
     );

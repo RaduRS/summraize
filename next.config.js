@@ -49,11 +49,11 @@ const nextConfig = {
       },
     ];
   },
-  experimental: {
-    serverActions: true,
-  },
+  // experimental: {
+  //   serverActions: true,
+  // },
   images: {
-    domains: ["images.unsplash.com"], // ✅ Add Unsplash as an allowed image source
+    domains: ["images.unsplash.com"],
     remotePatterns: [
       {
         protocol: "https",

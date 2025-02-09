@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/utils/supabase/server";
 import DeletePostButton from "./components/DeletePostButton";
 import TestBlogGenerate from "@/app/components/TestBlogGenerate";
@@ -35,67 +36,68 @@ export default async function AdminBlogPage() {
         </Link>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Title
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {posts?.map((post) => (
-              <tr key={post.slug} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {post.title}
-                  </div>
-                  <div className="text-sm text-gray-500">{post.slug}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      post.published
-                        ? "bg-green-100 text-green-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    }`}
-                  >
-                    {post.published ? "Published" : "Draft"}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {posts?.map((post) => (
+          <div
+            key={post.slug}
+            className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+          >
+            <div className="relative h-48">
+              {post.cover_image ? (
+                <Image
+                  src={post.cover_image}
+                  alt={post.title}
+                  fill
+                  className="object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                  <span className="text-gray-400">No cover image</span>
+                </div>
+              )}
+              <div className="absolute top-2 right-2">
+                <span
+                  className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    post.published
+                      ? "bg-green-100 text-green-800"
+                      : "bg-yellow-100 text-yellow-800"
+                  }`}
+                >
+                  {post.published ? "Published" : "Draft"}
+                </span>
+              </div>
+            </div>
+            <div className="p-4">
+              <h2 className="text-lg font-semibold mb-2 line-clamp-2">
+                {post.title}
+              </h2>
+              <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+                {post.excerpt}
+              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500">
                   {new Date(post.date).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                </span>
+                <div className="flex items-center gap-2">
                   <Link
                     href={`/admin/blog/${post.slug}/edit`}
-                    className="text-blue-600 hover:text-blue-900 mr-4"
+                    className="text-blue-600 hover:text-blue-900 text-sm font-medium"
                   >
                     Edit
                   </Link>
                   <Link
                     href={`/blog/${post.slug}`}
                     target="_blank"
-                    className="text-green-600 hover:text-green-900 mr-4"
+                    className="text-green-600 hover:text-green-900 text-sm font-medium"
                   >
                     View
                   </Link>
                   <DeletePostButton slug={post.slug} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

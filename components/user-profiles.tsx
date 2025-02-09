@@ -91,7 +91,7 @@ const profiles = [
 export function UserProfiles() {
   return (
     <div className="w-full py-12 sm:py-20 relative">
-      <BackgroundDecorations variant="dots" />
+      <BackgroundDecorations variant="particles" />
       <div className="relative w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12 sm:mb-16">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
