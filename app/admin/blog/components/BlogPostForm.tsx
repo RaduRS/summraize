@@ -49,16 +49,21 @@ interface BlogPostFormProps {
 
 // Add slug generation function
 const generateSlug = (title: string): string => {
-  // Remove special characters and replace with spaces
-  const sanitized = title.replace(/[^a-zA-Z0-9\s-]/g, " ");
-
-  // Convert to lowercase, trim spaces, replace multiple spaces with single dash
-  const baseSlug = sanitized.toLowerCase().trim().replace(/\s+/g, "-");
+  // Remove special characters and convert to lowercase
+  const sanitized = title
+    .toLowerCase()
+    .trim()
+    // Replace special characters with spaces
+    .replace(/[^a-z0-9\s-]/g, "")
+    // Replace multiple spaces or hyphens with a single hyphen
+    .replace(/[\s-]+/g, "-")
+    // Remove leading/trailing hyphens
+    .replace(/^-+|-+$/g, "");
 
   // Add last 5 digits of timestamp
   const timestamp = Date.now().toString().slice(-5);
 
-  return `${baseSlug}-${timestamp}`;
+  return `${sanitized}-${timestamp}`;
 };
 
 const AUTHORS = [

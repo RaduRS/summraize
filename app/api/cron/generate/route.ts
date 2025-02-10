@@ -189,7 +189,7 @@ Content...
 Return a JSON object in this format:
 
 {
-  "title": "Engaging, SEO-Optimized Title",
+  "title": "Engaging, short and SEO-Optimized Title",
   "slug": "The slug must be a URL-friendly version of the title followed by a 6-digit timestamp. Convert the title to lowercase, remove special characters, replace spaces with hyphens, and append a dash followed by the last 6 digits of the current timestamp. Example: 'my-blog-post-123456'",
   "content": "Markdown-formatted content including headers, quotes, stats, checklists, and images",
   "excerpt": "One-sentence summary optimized for SEO and social media.",

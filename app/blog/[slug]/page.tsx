@@ -311,7 +311,10 @@ export async function generateMetadata({
 }
 
 // Function to convert spaces to dashes in URLs
-const formatUrl = (text: string) => text.replace(/\s+/g, "-").toLowerCase();
+const formatUrl = (text: string) => {
+  const formatted = text.toLowerCase().trim();
+  return formatted === text ? text : formatted;
+};
 
 // Function to estimate reading time
 function getReadingTime(content: string): number {
@@ -326,14 +329,14 @@ export default async function BlogPost({ params }: { params: Params }) {
     notFound();
   }
 
-  // Format the slug to replace any spaces with dashes
+  // Only redirect if the slug contains uppercase letters or leading/trailing spaces
   const formattedSlug = formatUrl(slug);
-  if (formattedSlug !== slug) {
+  if (formattedSlug !== slug && formattedSlug !== decodeURIComponent(slug)) {
     // Redirect to the properly formatted URL
     redirect(`/blog/${formattedSlug}`);
   }
 
-  const post = await getPost(formattedSlug);
+  const post = await getPost(slug);
 
   if (!post) {
     notFound();
