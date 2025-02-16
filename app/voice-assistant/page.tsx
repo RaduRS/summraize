@@ -251,8 +251,45 @@ export default function VoiceAssistant() {
 
   const startRecording = async () => {
     try {
-      // Clear existing state
-      resetAllState();
+      // Clear existing state and saved state
+      clearVoiceAssistantState(); // Clear the saved state first
+
+      // Clear all results from UI
+      setResult((prev) =>
+        prev
+          ? {
+              audioUrl: "", // Will be set with new recording
+              transcription: "",
+              summary: "",
+            }
+          : null
+      );
+      setPartialTranscript("");
+      setWords([]);
+      if (ttsAudioUrl) {
+        URL.revokeObjectURL(ttsAudioUrl);
+        setTtsAudioUrl(null);
+      }
+
+      // Clear recording related state
+      setAudioBlob(null);
+      setAudioDuration(0);
+      setFinalDuration(0);
+      setRecordingTime(0);
+      setIsRecording(false);
+      setIsProcessing(false);
+      setIsTranscribing(false);
+
+      // Clear any existing timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+
+      // Revoke any existing audio URL
+      if (result?.audioUrl) {
+        URL.revokeObjectURL(result.audioUrl);
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = []; // Reset chunks
@@ -672,7 +709,7 @@ export default function VoiceAssistant() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Increase size limit for iOS devices which typically have larger file sizes
+    // File validation checks...
     const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
       toast({
@@ -705,8 +742,35 @@ export default function VoiceAssistant() {
       return;
     }
 
-    // Clear existing state
-    resetAllState();
+    // Clear existing state and saved state
+    clearVoiceAssistantState(); // Clear the saved state first
+
+    // Clear all results from UI
+    setResult((prev) =>
+      prev
+        ? {
+            audioUrl: "", // Will be set with new file
+            transcription: "",
+            summary: "",
+          }
+        : null
+    );
+    setPartialTranscript("");
+    setWords([]);
+    if (ttsAudioUrl) {
+      URL.revokeObjectURL(ttsAudioUrl);
+      setTtsAudioUrl(null);
+    }
+
+    // Clear audio related state
+    setAudioBlob(null);
+    setAudioDuration(0);
+    setFinalDuration(0);
+
+    // Revoke any existing audio URL
+    if (result?.audioUrl) {
+      URL.revokeObjectURL(result.audioUrl);
+    }
 
     // Handle the new file
     handleAudioReady(file);
