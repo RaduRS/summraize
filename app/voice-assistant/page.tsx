@@ -37,16 +37,6 @@ interface Word {
   punctuated_word: string;
 }
 
-interface VoiceAssistantState {
-  audioBlob: Blob;
-  transcription: string | null;
-  summary: string | null;
-  audioDuration: number;
-  finalDuration: number;
-  words: Word[];
-  ttsAudioBlob?: Blob;
-}
-
 export default function VoiceAssistant() {
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
@@ -83,15 +73,34 @@ export default function VoiceAssistant() {
   const [words, setWords] = useState<Word[]>([]);
   const [showRestoreNotice, setShowRestoreNotice] = useState(false);
 
-  const cleanTextForTTS = (text: string) => {
-    return text
-      .replace(/\n+/g, " ") // Remove line breaks
-      .replace(/\s+/g, " ") // Normalize spaces
-      .replace(/[^\S\n]+/g, " ") // Remove extra whitespace
-      .trim();
-  };
+  // Add a function to reset all state
+  const resetAllState = () => {
+    // Revoke any existing object URLs first
+    if (result?.audioUrl) {
+      URL.revokeObjectURL(result.audioUrl);
+    }
+    if (ttsAudioUrl) {
+      URL.revokeObjectURL(ttsAudioUrl);
+    }
 
-  const MAX_RECORDING_TIME = 60; // 1 minute max
+    setAudioBlob(null);
+    setResult(null);
+    setPartialTranscript("");
+    setWords([]);
+    setTtsAudioUrl(null);
+    setAudioDuration(0);
+    setFinalDuration(0);
+    setRecordingTime(0);
+    setIsRecording(false);
+    setIsProcessing(false);
+    setIsTranscribing(false);
+
+    // Clear any existing timer
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (isAuthenticated === false) {
@@ -108,40 +117,65 @@ export default function VoiceAssistant() {
   useEffect(() => {
     const savedState = loadVoiceAssistantState();
     if (savedState) {
-      // Always restore transcription and words if they exist
-      if (savedState.transcription) {
-        setPartialTranscript(savedState.transcription);
-      }
-      if (savedState.words) {
-        setWords(savedState.words);
-      }
-
-      // Restore audio blob and related state if it exists
-      if (savedState.audioBlob) {
-        setAudioBlob(savedState.audioBlob);
-        setAudioDuration(savedState.audioDuration);
-        setFinalDuration(savedState.finalDuration);
-
-        // Create audio URL from blob
-        const audioUrl = URL.createObjectURL(savedState.audioBlob);
-
-        // Set initial result with audio URL and transcription
-        setResult({
-          transcription: savedState.transcription || "",
-          audioUrl,
-          summary: savedState.summary || undefined,
-        });
-
-        // Restore TTS audio if it exists
-        if (savedState.ttsAudioBlob) {
-          const ttsUrl = URL.createObjectURL(savedState.ttsAudioBlob);
-          setTtsAudioUrl(ttsUrl);
+      try {
+        // Always restore transcription and words if they exist
+        if (savedState.transcription) {
+          setPartialTranscript(savedState.transcription);
+        }
+        if (savedState.words) {
+          setWords(savedState.words);
         }
 
-        setShowRestoreNotice(true);
-        setTimeout(() => setShowRestoreNotice(false), 3000);
+        // Restore audio blob and related state if it exists
+        if (savedState.audioBlob) {
+          // Create a new blob with the same data and type
+          const newBlob = new Blob([savedState.audioBlob], {
+            type: savedState.audioBlob.type || "audio/wav",
+          });
+          setAudioBlob(newBlob);
+          setAudioDuration(savedState.audioDuration || 0);
+          setFinalDuration(savedState.finalDuration || 0);
+
+          // Create fresh audio URL from the new blob
+          const audioUrl = URL.createObjectURL(newBlob);
+
+          // Set initial result with audio URL and transcription
+          setResult({
+            transcription: savedState.transcription || "",
+            audioUrl,
+            summary: savedState.summary || "",
+          });
+
+          // Restore TTS audio if it exists
+          if (savedState.ttsAudioBlob) {
+            // Create a new blob for TTS audio as well
+            const newTtsBlob = new Blob([savedState.ttsAudioBlob], {
+              type: savedState.ttsAudioBlob.type || "audio/mp3",
+            });
+            const ttsUrl = URL.createObjectURL(newTtsBlob);
+            setTtsAudioUrl(ttsUrl);
+          }
+
+          setShowRestoreNotice(true);
+          setTimeout(() => setShowRestoreNotice(false), 3000);
+        }
+      } catch (error) {
+        console.error("Error restoring session:", error);
+        // If restoration fails, clear everything
+        clearVoiceAssistantState();
+        resetAllState();
       }
     }
+
+    // Cleanup function to revoke URLs when component unmounts
+    return () => {
+      if (result?.audioUrl) {
+        URL.revokeObjectURL(result.audioUrl);
+      }
+      if (ttsAudioUrl) {
+        URL.revokeObjectURL(ttsAudioUrl);
+      }
+    };
   }, []);
 
   // Save state when important data changes
@@ -183,47 +217,42 @@ export default function VoiceAssistant() {
     words,
   ]);
 
-  // Add cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Clean up audio URLs to prevent memory leaks
-      if (result?.audioUrl) {
-        URL.revokeObjectURL(result.audioUrl);
+  // Add a function to handle audio errors and try to recover
+  const handleAudioError = async () => {
+    if (audioBlob) {
+      try {
+        // Create a new blob URL
+        const newUrl = URL.createObjectURL(audioBlob);
+        setResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                audioUrl: newUrl,
+              }
+            : null
+        );
+
+        // Clean up old URL after a short delay
+        setTimeout(() => {
+          if (result?.audioUrl && result.audioUrl !== newUrl) {
+            URL.revokeObjectURL(result.audioUrl);
+          }
+        }, 1000);
+      } catch (error) {
+        console.error("Error recovering audio playback:", error);
+        toast({
+          title: "Playback Error",
+          description: "Unable to play audio. Please try recording again.",
+          variant: "destructive",
+        });
       }
-      if (ttsAudioUrl) {
-        URL.revokeObjectURL(ttsAudioUrl);
-      }
-    };
-  }, [result?.audioUrl, ttsAudioUrl]);
+    }
+  };
 
   const startRecording = async () => {
     try {
       // Clear existing state
-      clearVoiceAssistantState();
-
-      // Clear all state variables
-      setAudioBlob(null);
-      setResult(null);
-      setPartialTranscript("");
-      setWords([]);
-      setTtsAudioUrl(null);
-      setAudioDuration(0);
-      setFinalDuration(0);
-      setRecordingTime(0);
-
-      // Clear any existing timer
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-
-      // Revoke any existing object URLs
-      if (result?.audioUrl) {
-        URL.revokeObjectURL(result.audioUrl);
-      }
-      if (ttsAudioUrl) {
-        URL.revokeObjectURL(ttsAudioUrl);
-      }
+      resetAllState();
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = []; // Reset chunks
@@ -677,22 +706,7 @@ export default function VoiceAssistant() {
     }
 
     // Clear existing state
-    clearVoiceAssistantState();
-    setAudioBlob(null);
-    setResult(null);
-    setPartialTranscript("");
-    setWords([]);
-    setTtsAudioUrl(null);
-    setAudioDuration(0);
-    setFinalDuration(0);
-
-    // Revoke any existing object URLs
-    if (result?.audioUrl) {
-      URL.revokeObjectURL(result.audioUrl);
-    }
-    if (ttsAudioUrl) {
-      URL.revokeObjectURL(ttsAudioUrl);
-    }
+    resetAllState();
 
     // Handle the new file
     handleAudioReady(file);
@@ -1303,7 +1317,7 @@ export default function VoiceAssistant() {
               </div>
               <AudioPlayer
                 src={result?.audioUrl || URL.createObjectURL(audioBlob)}
-                onError={() => alert("Error playing audio")}
+                onError={handleAudioError}
                 initialDuration={finalDuration}
                 onLoadedMetadata={(e) => {
                   const audio = e.target as HTMLAudioElement;
