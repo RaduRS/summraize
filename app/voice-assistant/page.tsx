@@ -209,6 +209,13 @@ export default function VoiceAssistant() {
       setTtsAudioUrl(null);
       setAudioDuration(0);
       setFinalDuration(0);
+      setRecordingTime(0);
+
+      // Clear any existing timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
 
       // Revoke any existing object URLs
       if (result?.audioUrl) {
@@ -219,6 +226,7 @@ export default function VoiceAssistant() {
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunksRef.current = []; // Reset chunks
 
       // Initialize WebSocket connection
       wsRef.current = new WebSocket(
@@ -276,10 +284,8 @@ export default function VoiceAssistant() {
 
       const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
 
       // Start the recording timer
-      setRecordingTime(0);
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime((time) => time + 1);
       }, 1000);
@@ -294,7 +300,7 @@ export default function VoiceAssistant() {
         const audioBlob = new Blob(chunksRef.current, {
           type: mediaRecorder.mimeType || "audio/webm",
         });
-        handleAudioReady(audioBlob);
+        await handleAudioReady(audioBlob);
       };
 
       mediaRecorder.start();
@@ -310,7 +316,21 @@ export default function VoiceAssistant() {
   };
 
   const stopRecording = async () => {
-    if (mediaRecorderRef.current && isRecording) {
+    try {
+      if (!mediaRecorderRef.current || !isRecording) return;
+
+      // Save the current recording time before any cleanup
+      const currentTime = recordingTime;
+
+      // Set the duration immediately
+      setFinalDuration(currentTime);
+      setAudioDuration(currentTime);
+
+      // Stop recording first to ensure all data is captured
+      mediaRecorderRef.current.stop();
+      const tracks = mediaRecorderRef.current.stream.getTracks();
+      tracks.forEach((track) => track.stop());
+
       // Clean up WebSocket and audio processing
       if (wsRef.current) {
         wsRef.current.close();
@@ -328,39 +348,45 @@ export default function VoiceAssistant() {
       // Clear the recording timer
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
       }
 
-      // Save the final recording time
-      setFinalDuration(recordingTime);
-      setAudioDuration(recordingTime);
+      // Create the audio blob
+      const finalBlob = new Blob(chunksRef.current, {
+        type: mediaRecorderRef.current.mimeType || "audio/mp4",
+      });
 
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream
-        .getTracks()
-        .forEach((track) => track.stop());
+      // Set recording state
       setIsRecording(false);
+      setIsTranscribing(false);
 
-      // Store the final transcript and reset partial
+      // Handle the audio blob
+      await handleAudioReady(finalBlob);
+
+      // Store the final transcript
       if (partialTranscript) {
-        setResult({
-          transcription: partialTranscript.trim(),
-          audioUrl: URL.createObjectURL(
-            new Blob(chunksRef.current, {
-              type: mediaRecorderRef.current?.mimeType || "audio/mp4",
-            })
-          ),
-        });
+        setResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                transcription: partialTranscript.trim(),
+              }
+            : null
+        );
         setPartialTranscript("");
-        setIsTranscribing(false);
       }
+    } catch (error) {
+      console.error("Error stopping recording:", error);
+      toast({
+        title: "Error",
+        description: "Failed to stop recording properly. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleAudioReady = async (blob: Blob) => {
     setIsProcessing(true);
-    setPartialTranscript("");
-    setResult(null);
-
     try {
       // For iOS compatibility, if the blob is not in a supported format, convert it
       let finalBlob = blob;
@@ -397,37 +423,57 @@ export default function VoiceAssistant() {
             console.log("Compression did not reduce file size, using original");
           }
         } catch (error) {
-          console.error("Compression error:", error);
-          // Continue with original blob if compression fails
+          // Just log compression error and continue with original blob
+          console.log(
+            "Compression skipped:",
+            error instanceof Error ? error.message : "Unknown error"
+          );
         }
       }
 
-      // Store the final blob and create audio URL immediately
+      // Create audio URL and set blob
+      const audioUrl = URL.createObjectURL(finalBlob);
       setAudioBlob(finalBlob);
+
+      // Set the result with the audio URL
       setResult({
         transcription: "",
-        audioUrl: URL.createObjectURL(finalBlob),
+        audioUrl,
         summary: "",
       });
 
-      // Set audio duration
-      if (recordingTime > 0) {
-        setAudioDuration(recordingTime);
-        setFinalDuration(recordingTime);
-      } else {
-        const audioDuration = await getAudioDuration(finalBlob);
-        setAudioDuration(Math.ceil(audioDuration));
-        setFinalDuration(Math.ceil(audioDuration));
+      // Only try to get duration if we don't already have it from recording time
+      if (recordingTime <= 0) {
+        try {
+          const duration = await getAudioDuration(finalBlob);
+          if (duration && isFinite(duration) && duration > 0) {
+            const finalDuration = Math.ceil(duration);
+            setAudioDuration(finalDuration);
+            setFinalDuration(finalDuration);
+          }
+        } catch (error) {
+          console.log(
+            "Could not get audio duration:",
+            error instanceof Error ? error.message : "Unknown error"
+          );
+          // Don't throw - we might already have duration from recording time
+        }
       }
 
       setTtsAudioUrl(null);
     } catch (error) {
-      console.error("Error processing audio:", error);
-      toast({
-        title: "Processing Error",
-        description: "Failed to process audio file. Please try again.",
-        variant: "destructive",
-      });
+      // Only show error if we actually failed to process the audio
+      if (!audioBlob || !result?.audioUrl) {
+        console.error(
+          "Failed to process audio:",
+          error instanceof Error ? error.message : "Unknown error"
+        );
+        toast({
+          title: "Processing Error",
+          description: "Failed to process audio file. Please try again.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -1236,10 +1282,9 @@ export default function VoiceAssistant() {
             <div className="rounded-lg border bg-card p-4">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-sm text-muted-foreground">
-                  Audio Ready
-                  {recordingTime > 0
-                    ? ` (${Math.floor(finalDuration / 60)}:${(finalDuration % 60).toString().padStart(2, "0")})`
-                    : ""}
+                  Audio Ready{" "}
+                  {finalDuration > 0 &&
+                    ` (${Math.floor(finalDuration / 60)}:${(finalDuration % 60).toString().padStart(2, "0")})`}
                 </h4>
                 <Button
                   onClick={() => {
