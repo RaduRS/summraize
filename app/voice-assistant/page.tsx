@@ -1773,21 +1773,36 @@ export default function VoiceAssistant() {
                 onClick={startRecording}
                 disabled={isProcessing}
                 size="lg"
-                className="w-full sm:w-32 px-2"
+                className="group w-full sm:w-32 px-2 bg-zinc-900 hover:bg-red-600 text-white dark:bg-zinc-800 dark:hover:bg-red-600 transition-all duration-300 overflow-hidden relative"
               >
-                <Mic className="w-4 h-4 mr-2" strokeWidth={2} />
-                Record
+                <div className="flex items-center justify-center w-full relative">
+                  <Mic
+                    className="w-4 h-4 mr-2 transition-all duration-300 absolute left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-hover:scale-150 group-hover:animate-pulse"
+                    strokeWidth={2}
+                  />
+                  <div className="flex items-center transition-all duration-300 group-hover:translate-x-[200%] group-hover:opacity-0">
+                    <Mic className="w-4 h-4 mr-2" strokeWidth={2} />
+                    <span>Record</span>
+                  </div>
+                </div>
               </Button>
               <div className="flex flex-col gap-1 w-full sm:w-48">
                 <Button
                   onClick={startRealTimeRecording}
                   disabled={isProcessing}
                   size="lg"
-                  className="w-full px-2"
-                  variant="secondary"
+                  className="group w-full px-2 bg-zinc-700 hover:bg-red-600 text-white dark:bg-zinc-800 dark:hover:bg-red-600 transition-all duration-300 overflow-hidden relative"
                 >
-                  <Mic className="w-4 h-4 mr-2" strokeWidth={2} />
-                  Live Transcribe
+                  <div className="flex items-center justify-center w-full relative">
+                    <Mic
+                      className="w-4 h-4 mr-2 transition-all duration-300 absolute left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-hover:scale-150 group-hover:animate-pulse"
+                      strokeWidth={2}
+                    />
+                    <div className="flex items-center transition-all duration-300 group-hover:translate-x-[200%] group-hover:opacity-0">
+                      <Mic className="w-4 h-4 mr-2" strokeWidth={2} />
+                      <span>Live Transcribe</span>
+                    </div>
+                  </div>
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
                   Charges 18 credits per minute
@@ -1796,12 +1811,19 @@ export default function VoiceAssistant() {
               <Button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isProcessing}
-                variant="outline"
                 size="lg"
-                className="w-full sm:w-32 px-2"
+                className="group w-full sm:w-32 px-2 border-zinc-200 bg-zinc-100 hover:bg-zinc-50 dark:bg-zinc-800 dark:border-zinc-700 dark:hover:bg-zinc-800/50 transition-all duration-100 overflow-hidden relative"
+                variant="outline"
               >
-                <Upload className="w-4 h-4 mr-2" strokeWidth={2} />
-                Upload
+                <div className="flex items-center justify-center w-full">
+                  <Upload
+                    className="w-4 h-4 mr-2 transition-all duration-100 group-hover:animate-bounce"
+                    strokeWidth={2}
+                  />
+                  <span>
+                    Upload
+                  </span>
+                </div>
               </Button>
               <input
                 ref={fileInputRef}
@@ -1818,10 +1840,12 @@ export default function VoiceAssistant() {
               }
               variant="destructive"
               size="lg"
-              className="w-full sm:w-32"
+              className="w-full sm:w-32 group"
             >
-              <Square className="mr-2 h-4 w-4" />
-              Stop
+              <Square className="mr-2 h-4 w-4 group-hover:rotate-90 transition-all duration-300" />
+              <span className="group-hover:translate-x-1 transition-all duration-300">
+                Stop
+              </span>
             </Button>
           )}
         </div>

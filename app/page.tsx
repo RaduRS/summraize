@@ -12,6 +12,7 @@ import Link from "next/link";
 import { CheckCircle2, Zap, Shield, Clock } from "lucide-react";
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
+import PixelCard from "@/components/PixelCard";
 
 export default function Home() {
   const benefitsRef = useRef(null);
@@ -65,24 +66,28 @@ export default function Home() {
                 title: "Lightning Fast",
                 description:
                   "Get results in seconds, not minutes. Our AI processes content at incredible speeds.",
+                variant: "blue",
               },
               {
                 icon: Shield,
                 title: "Secure & Private",
                 description:
                   "Your content is encrypted and processed with enterprise-grade security.",
+                variant: "pink",
               },
               {
                 icon: CheckCircle2,
                 title: "High Accuracy",
                 description:
                   "Advanced AI models ensure precise transcription and summarization.",
+                variant: "blue",
               },
               {
                 icon: Clock,
                 title: "Pay As You Go",
                 description:
                   "Only pay for what you use. No hidden fees or monthly commitments.",
+                variant: "pink",
               },
             ].map((benefit, index) => (
               <motion.div
@@ -97,18 +102,27 @@ export default function Home() {
                   duration: 0.5,
                   delay: areBenefitsInView ? index * 0.1 : 0,
                 }}
+                className="h-full"
               >
-                <Card className="p-6 hover:shadow-lg transition-all hover:scale-[1.02] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-                  <div className="flex items-start gap-4">
-                    <benefit.icon className="h-6 w-6 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                    <div>
-                      <h3 className="font-semibold mb-2">{benefit.title}</h3>
-                      <p className="text-gray-600 dark:text-gray-300">
-                        {benefit.description}
-                      </p>
+                <PixelCard
+                  variant={benefit.variant as "pink" | "blue"}
+                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm h-full"
+                  speed={30}
+                  noFocus={false}
+                  gap={6}
+                >
+                  <div className="p-6 h-full flex flex-col">
+                    <div className="flex items-start gap-4">
+                      <benefit.icon className="h-6 w-6 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h3 className="font-semibold mb-2">{benefit.title}</h3>
+                        <p className="text-gray-600 dark:text-gray-300">
+                          {benefit.description}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </Card>
+                </PixelCard>
               </motion.div>
             ))}
           </div>
