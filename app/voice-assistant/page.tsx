@@ -1404,14 +1404,17 @@ export default function VoiceAssistant() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // Set up MediaRecorder for actual audio recording
-      const options = {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : MediaRecorder.isTypeSupported("audio/wav")
-            ? "audio/wav"
-            : "audio/webm",
-      };
+      // Set up MediaRecorder with iOS-compatible options
+      let options = {};
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        options = { mimeType: "audio/webm;codecs=opus" };
+      } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+        options = { mimeType: "audio/mp4" };
+      } else if (MediaRecorder.isTypeSupported("audio/aac")) {
+        options = { mimeType: "audio/aac" };
+      } else if (MediaRecorder.isTypeSupported("audio/wav")) {
+        options = { mimeType: "audio/wav" };
+      }
 
       const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
