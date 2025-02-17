@@ -567,8 +567,12 @@ function PricingContent() {
                     <h3 className="font-semibold mb-2">Voice Assistant</h3>
                     <ul className="list-disc pl-6 space-y-1 text-sm">
                       <li>
-                        Audio Transcription: 18 credits per minute (minimum 18
-                        credits)
+                        Live Transcription: 18 credits per minute (charged when
+                        recording stops)
+                      </li>
+                      <li>
+                        Regular Audio Transcription: 18 credits per minute
+                        (minimum 18 credits)
                       </li>
                       <li>
                         Text Summarization: 12 credits per 1,000 characters,

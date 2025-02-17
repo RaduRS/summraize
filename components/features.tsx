@@ -22,9 +22,9 @@ const solutions = [
     icon: Mic,
     features: [
       "Accurate speech-to-text transcription",
+      "Live transcription capability",
       "Smart content summarization",
       "Natural AI voice synthesis",
-      "Real-time processing",
     ],
     primaryUses: [
       "Meeting recordings",
