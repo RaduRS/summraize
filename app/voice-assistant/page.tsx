@@ -37,6 +37,79 @@ interface Word {
   punctuated_word: string;
 }
 
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  grammars?: SpeechGrammarList;
+  start(): void;
+  stop(): void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+  onend: () => void;
+  onstart: () => void;
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognition;
+}
+
+interface Window {
+  SpeechRecognition?: new () => SpeechRecognition;
+  webkitSpeechRecognition?: new () => SpeechRecognition;
+  AudioContext: typeof AudioContext;
+  webkitAudioContext: typeof AudioContext;
+  SpeechGrammarList?: new () => SpeechGrammarList;
+  webkitSpeechGrammarList?: new () => SpeechGrammarList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message?: string;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechGrammarList {
+  addFromString(string: string, weight?: number): void;
+  addFromURI(src: string, weight?: number): void;
+  item(index: number): SpeechGrammar;
+  readonly length: number;
+}
+
+interface SpeechGrammar {
+  src: string;
+  weight: number;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognition;
+    webkitSpeechRecognition?: new () => SpeechRecognition;
+  }
+}
+
 export default function VoiceAssistant() {
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
@@ -67,11 +140,16 @@ export default function VoiceAssistant() {
   const router = useRouter();
   const [partialTranscript, setPartialTranscript] = useState<string>("");
   const wsRef = useRef<WebSocket | null>(null);
-  const processorRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [words, setWords] = useState<Word[]>([]);
   const [showRestoreNotice, setShowRestoreNotice] = useState(false);
+  const [isRealTimeRecording, setIsRealTimeRecording] = useState(false);
+  const [realTimeTranscript, setRealTimeTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Add a function to reset all state
   const resetAllState = () => {
@@ -301,18 +379,16 @@ export default function VoiceAssistant() {
       );
 
       // Create audio context and processor
-      audioContextRef.current = new AudioContext();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      const processor = audioContextRef.current.createScriptProcessor(
-        2048,
-        1,
-        1
-      );
-      processorRef.current = source;
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      sourceRef.current = source;
+      const processor = audioContext.createScriptProcessor(2048, 1, 1);
+      processorRef.current = processor;
 
       // Connect audio nodes
       source.connect(processor);
-      processor.connect(audioContextRef.current.destination);
+      processor.connect(audioContext.destination);
 
       // Handle audio processing
       processor.onaudioprocess = (e) => {
@@ -333,9 +409,25 @@ export default function VoiceAssistant() {
       wsRef.current.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.channel?.alternatives?.[0]?.transcript) {
-          setPartialTranscript(
-            (prev) => prev + " " + data.channel.alternatives[0].transcript
+          const transcript = data.channel.alternatives[0].transcript;
+          const isFinal = data.is_final;
+          console.log(
+            "Received transcript:",
+            transcript,
+            isFinal ? "(final)" : "(interim)"
           );
+
+          setRealTimeTranscript((prev) => {
+            // For interim results, replace the last segment
+            if (!isFinal) {
+              // Split by sentences and keep all but the last one
+              const sentences = prev.split(/(?<=[.!?])\s+/);
+              const allButLast = sentences.slice(0, -1).join(" ");
+              return (allButLast + (allButLast ? " " : "") + transcript).trim();
+            }
+            // For final results, append with proper spacing
+            return (prev + (prev ? ". " : "") + transcript).trim();
+          });
         }
       };
 
@@ -782,7 +874,8 @@ export default function VoiceAssistant() {
       setIsProcessing(true);
       let transcribeCredits = 0;
       const formData = new FormData();
-      formData.append("audio", audioBlob!, "audio.webm");
+      const blob = new Blob([audioBlob!], { type: audioBlob!.type });
+      formData.append("audio", blob);
       formData.append("duration", audioDuration.toString());
 
       try {
@@ -855,14 +948,14 @@ export default function VoiceAssistant() {
           transcriptParts.join(" ").trim()
         );
 
-        // Update result while preserving the existing audioUrl
+        // Update result with the accurate Deepgram transcription
         setResult((prev) => ({
-          transcription: finalTranscript,
+          transcription: finalTranscript || prev?.transcription || "",
           audioUrl: prev?.audioUrl || "",
           summary: prev?.summary || "",
         }));
 
-        setPartialTranscript(finalTranscript);
+        creditsEvent.emit();
         return { text: finalTranscript, credits: transcribeCredits };
       } catch (error) {
         console.error("Transcription error:", error);
@@ -1227,17 +1320,32 @@ export default function VoiceAssistant() {
         throw new Error(data.error || "Failed to check credits");
       }
 
+      setIsTranscribing(true);
+      setIsProcessing(true);
+
       const { text: transcription, credits: transcribeCredits } =
         await transcribeIfNeeded();
       if (!transcription) {
         throw new Error("Failed to get transcription");
       }
 
+      // Update the UI with the transcription
+      setResult((prev) => ({
+        transcription: transcription,
+        audioUrl: prev?.audioUrl || "",
+        summary: prev?.summary || "",
+      }));
+      setPartialTranscript(transcription);
+
       creditsEvent.emit();
-      toast({
-        title: "Operation Complete",
-        description: `${transcribeCredits} credits were deducted for transcription`,
-      });
+
+      // Only show toast if this wasn't called from stopRealTimeRecording
+      if (!isRealTimeRecording) {
+        toast({
+          title: "Operation Complete",
+          description: `${transcribeCredits} credits were deducted for transcription`,
+        });
+      }
     } catch (error: any) {
       console.error("Error in transcription:", error);
       toast({
@@ -1245,6 +1353,9 @@ export default function VoiceAssistant() {
         description: error.message || "Failed to transcribe",
         variant: "destructive",
       });
+    } finally {
+      setIsTranscribing(false);
+      setIsProcessing(false);
     }
   };
 
@@ -1279,6 +1390,346 @@ export default function VoiceAssistant() {
       .trim();
   };
 
+  const startRealTimeRecording = async () => {
+    try {
+      // Clear existing state and saved state
+      clearVoiceAssistantState();
+      resetAllState();
+
+      // Reset state
+      setRealTimeTranscript("");
+      setInterimTranscript("");
+
+      // Get audio stream for both recording and transcription
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      // Set up MediaRecorder for actual audio recording
+      const options = {
+        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : MediaRecorder.isTypeSupported("audio/wav")
+            ? "audio/wav"
+            : "audio/webm",
+      };
+
+      const mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      // Create speech recognition instance
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        throw new Error("Speech recognition not supported in this browser");
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      // Start recording timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((time) => time + 1);
+      }, 1000);
+
+      recognition.onstart = () => {
+        mediaRecorder.start(); // Start audio recording
+        toast({
+          title: "Started",
+          description:
+            "Real-time transcription is ready. You will be charged 18 credits per minute when you stop recording.",
+        });
+      };
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let finalTranscript = "";
+        let interimTranscript = "";
+
+        // Only look at the most recent results
+        const currentResults = Array.from(event.results).slice(
+          event.resultIndex
+        );
+
+        for (const result of currentResults) {
+          if (result.isFinal) {
+            // Add proper spacing and handle punctuation
+            const transcript = result[0].transcript;
+            finalTranscript +=
+              transcript.trim() + (transcript.match(/[.!?]$/) ? " " : ". ");
+          } else {
+            interimTranscript += result[0].transcript + " ";
+          }
+        }
+
+        if (finalTranscript) {
+          setRealTimeTranscript((prev) => {
+            // Split into sentences and capitalize each one
+            const sentences = (prev + finalTranscript)
+              .split(/([.!?]\s+)/)
+              .map((part, i, arr) => {
+                // If it's a punctuation part, just return it
+                if (part.match(/[.!?]\s+/)) return part;
+                // If it's preceded by a punctuation or it's the first part, capitalize it
+                if (i === 0 || arr[i - 1]?.match(/[.!?]\s+/)) {
+                  return part.charAt(0).toUpperCase() + part.slice(1);
+                }
+                return part;
+              })
+              .join("");
+
+            // Save to session storage as we go
+            const state: Partial<StoredVoiceAssistantState> = {
+              transcription: sentences.trim(),
+              audioDuration: recordingTime,
+              finalDuration: recordingTime,
+            };
+            saveVoiceAssistantState(state);
+            return sentences;
+          });
+        }
+        setInterimTranscript(interimTranscript);
+      };
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error("Speech recognition error:", event.error);
+        toast({
+          title: "Error",
+          description: `Recognition error: ${event.error}`,
+          variant: "destructive",
+        });
+      };
+
+      recognition.onend = () => {
+        if (isRealTimeRecording) {
+          // Restart if still recording
+          recognition.start();
+        }
+      };
+
+      // Store recognition instance for cleanup
+      wsRef.current = recognition as any; // Reuse wsRef to store recognition instance
+
+      // Start recognition
+      recognition.start();
+      setIsRealTimeRecording(true);
+    } catch (err) {
+      console.error("Error starting real-time recording:", err);
+      toast({
+        title: "Recording Error",
+        description:
+          err instanceof Error ? err.message : "Failed to start recording",
+        variant: "destructive",
+      });
+      stopRealTimeRecording();
+    }
+  };
+
+  const stopRealTimeRecording = async () => {
+    if (wsRef.current) {
+      (wsRef.current as any).stop();
+      wsRef.current = null;
+    }
+
+    // Stop the MediaRecorder and get the audio
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
+      mediaRecorderRef.current.stop();
+
+      // Handle the recorded audio
+      mediaRecorderRef.current.onstop = async () => {
+        try {
+          // Create the audio blob first
+          const audioBlob = new Blob(chunksRef.current, {
+            type: mediaRecorderRef.current?.mimeType || "audio/webm",
+          });
+
+          // Set the audio blob state
+          setAudioBlob(audioBlob);
+          const audioUrl = URL.createObjectURL(audioBlob);
+
+          // Save initial state with real-time transcription
+          const finalDurationTime = recordingTime;
+          setFinalDuration(finalDurationTime);
+          setAudioDuration(finalDurationTime);
+
+          // Update the result with the audio URL and initial transcription
+          setResult({
+            transcription: realTimeTranscript,
+            audioUrl,
+            summary: "",
+          });
+          setPartialTranscript(realTimeTranscript);
+
+          // Save to session storage
+          const state: Partial<StoredVoiceAssistantState> = {
+            transcription: realTimeTranscript,
+            audioDuration: finalDurationTime,
+            finalDuration: finalDurationTime,
+            audioBlob: audioBlob,
+          };
+          saveVoiceAssistantState(state);
+
+          // Wait a moment for state to update
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          // Now trigger transcription with the proper blob
+          try {
+            setIsTranscribing(true);
+            setIsProcessing(true);
+
+            // Convert to WAV if needed
+            let finalBlob = audioBlob;
+            if (audioBlob.type !== "audio/wav") {
+              try {
+                finalBlob = await compressAudio(audioBlob);
+              } catch (error) {
+                console.error("Error converting to WAV:", error);
+                // Continue with original blob if conversion fails
+              }
+            }
+
+            const formData = new FormData();
+            formData.append("audio", finalBlob);
+            formData.append("duration", finalDurationTime.toString());
+
+            const transcribeResponse = await fetch("/api/stream-transcribe", {
+              method: "POST",
+              body: formData,
+              credentials: "include",
+            });
+
+            if (!transcribeResponse.ok) {
+              const errorData = await transcribeResponse.json();
+              throw new Error(
+                errorData.error || "Failed to start transcription"
+              );
+            }
+
+            const reader = transcribeResponse.body?.getReader();
+            const decoder = new TextDecoder();
+            let transcriptParts: string[] = [];
+            let accumulatedTranscript = "";
+
+            if (!reader) {
+              throw new Error("Failed to create stream reader");
+            }
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              const chunk = decoder.decode(value);
+              const lines = chunk.split("\n");
+
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.transcript) {
+                      accumulatedTranscript += " " + data.transcript;
+                      setPartialTranscript(accumulatedTranscript.trim());
+
+                      if (data.words && data.words.length > 0) {
+                        setWords((prevWords) => {
+                          const newWords = data.words.filter((word: Word) => {
+                            const wordKey = `${word.start}-${word.end}-${word.word}`;
+                            return !prevWords.some(
+                              (w) => `${w.start}-${w.end}-${w.word}` === wordKey
+                            );
+                          });
+                          return [...prevWords, ...newWords];
+                        });
+                      }
+
+                      if (data.is_final) {
+                        transcriptParts.push(data.transcript);
+                      }
+                    }
+                  } catch (e) {
+                    console.error("Error parsing SSE data:", e);
+                  }
+                }
+              }
+            }
+
+            const finalTranscript = formatTranscript(
+              transcriptParts.join(" ").trim()
+            );
+
+            // Update result with the accurate Deepgram transcription
+            setResult((prev) => ({
+              transcription: finalTranscript || prev?.transcription || "",
+              audioUrl: prev?.audioUrl || "",
+              summary: prev?.summary || "",
+            }));
+
+            creditsEvent.emit();
+          } catch (error) {
+            console.error("Error during automatic transcription:", error);
+            toast({
+              title: "Transcription Error",
+              description:
+                "Failed to get accurate transcription. Using real-time version instead.",
+              variant: "destructive",
+            });
+          } finally {
+            setIsTranscribing(false);
+            setIsProcessing(false);
+          }
+        } catch (error) {
+          console.error("Error processing audio:", error);
+          toast({
+            title: "Processing Error",
+            description: "Failed to process audio. Please try again.",
+            variant: "destructive",
+          });
+        }
+      };
+    }
+
+    // Stop all tracks in the stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+
+    setRecordingTime(0);
+    setIsRealTimeRecording(false);
+    setInterimTranscript("");
+  };
+
+  // Update cleanup effect
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        if (wsRef.current instanceof WebSocket) {
+          wsRef.current.close();
+        } else {
+          // Stop speech recognition if active
+          (wsRef.current as any).stop();
+        }
+      }
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="flex flex-col items-center gap-6 sm:gap-8 p-4 sm:p-8">
       {showRestoreNotice && (
@@ -1303,8 +1754,8 @@ export default function VoiceAssistant() {
         </p>
 
         <div className="border rounded-lg p-4 bg-muted/50">
-          <AudioVisualizer isRecording={isRecording} />
-          {isRecording && (
+          <AudioVisualizer isRecording={isRecording || isRealTimeRecording} />
+          {(isRecording || isRealTimeRecording) && (
             <div className="text-center mt-2 font-mono text-sm">
               {Math.floor(recordingTime / 60)}:
               {(recordingTime % 60).toString().padStart(2, "0")}
@@ -1313,7 +1764,7 @@ export default function VoiceAssistant() {
         </div>
 
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          {!isRecording ? (
+          {!isRecording && !isRealTimeRecording ? (
             <>
               <Button
                 onClick={startRecording}
@@ -1324,6 +1775,21 @@ export default function VoiceAssistant() {
                 <Mic className="w-4 h-4 mr-2" strokeWidth={2} />
                 Record
               </Button>
+              <div className="flex flex-col gap-1 w-full sm:w-48">
+                <Button
+                  onClick={startRealTimeRecording}
+                  disabled={isProcessing}
+                  size="lg"
+                  className="w-full px-2"
+                  variant="secondary"
+                >
+                  <Mic className="w-4 h-4 mr-2" strokeWidth={2} />
+                  Live Transcribe
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  Charges 18 credits per minute
+                </p>
+              </div>
               <Button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isProcessing}
@@ -1344,7 +1810,9 @@ export default function VoiceAssistant() {
             </>
           ) : (
             <Button
-              onClick={stopRecording}
+              onClick={
+                isRealTimeRecording ? stopRealTimeRecording : stopRecording
+              }
               variant="destructive"
               size="lg"
               className="w-full sm:w-32"
@@ -1355,48 +1823,102 @@ export default function VoiceAssistant() {
           )}
         </div>
 
+        {/* Real-time transcription display */}
+        {isRealTimeRecording && (realTimeTranscript || interimTranscript) && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold">Live Transcription</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => {
+                  const fullTranscript =
+                    realTimeTranscript +
+                    (interimTranscript ? " " + interimTranscript : "");
+                  navigator.clipboard.writeText(fullTranscript);
+                  toast({
+                    title: "Copied!",
+                    description: "Transcription copied to clipboard",
+                  });
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg">
+              <div className="whitespace-pre-wrap select-text">
+                {realTimeTranscript}
+                <span className="text-gray-500">{interimTranscript}</span>
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0, 1, 0] }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    ease: "linear",
+                  }}
+                  className="inline-block w-0.5 h-4 bg-muted-foreground ml-1 align-middle"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {audioBlob && (
           <div className="w-full max-w-2xl space-y-4">
-            <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-sm text-muted-foreground">
-                  Audio Ready{" "}
-                  {finalDuration > 0 &&
-                    ` (${Math.floor(finalDuration / 60)}:${(finalDuration % 60).toString().padStart(2, "0")})`}
-                </h4>
-                <Button
-                  onClick={() => {
-                    if (audioBlob) {
-                      const url = URL.createObjectURL(audioBlob);
-                      downloadAudio(url, `recording-${Date.now()}.wav`);
-                      URL.revokeObjectURL(url);
+            {audioBlob.size > 0 && (
+              <div className="rounded-lg border bg-card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">
+                    Audio Ready{" "}
+                    {finalDuration > 0 &&
+                      ` (${Math.floor(finalDuration / 60)}:${(
+                        finalDuration % 60
+                      )
+                        .toString()
+                        .padStart(2, "0")})`}
+                  </h4>
+                  <Button
+                    onClick={() => {
+                      if (audioBlob) {
+                        const extension = audioBlob.type.includes("webm")
+                          ? "webm"
+                          : audioBlob.type.includes("wav")
+                            ? "wav"
+                            : "webm";
+                        const fileName = `recording-${Date.now()}.${extension}`;
+                        const url = URL.createObjectURL(audioBlob);
+                        downloadAudio(url, fileName);
+                        URL.revokeObjectURL(url);
+                      }
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
+                <AudioPlayer
+                  src={result?.audioUrl || URL.createObjectURL(audioBlob)}
+                  onError={handleAudioError}
+                  initialDuration={finalDuration}
+                  onLoadedMetadata={(e) => {
+                    const audio = e.target as HTMLAudioElement;
+                    if (
+                      audio.duration &&
+                      !isNaN(audio.duration) &&
+                      isFinite(audio.duration)
+                    ) {
+                      setAudioDuration(audio.duration);
+                    } else {
+                      setAudioDuration(finalDuration);
                     }
                   }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
+                />
               </div>
-              <AudioPlayer
-                src={result?.audioUrl || URL.createObjectURL(audioBlob)}
-                onError={handleAudioError}
-                initialDuration={finalDuration}
-                onLoadedMetadata={(e) => {
-                  const audio = e.target as HTMLAudioElement;
-                  if (
-                    audio.duration &&
-                    !isNaN(audio.duration) &&
-                    isFinite(audio.duration)
-                  ) {
-                    setAudioDuration(audio.duration);
-                  } else {
-                    setAudioDuration(finalDuration);
-                  }
-                }}
-              />
-            </div>
+            )}
 
             <div className="flex flex-col sm:flex-row justify-between gap-4">
               <CostButton
@@ -1405,14 +1927,11 @@ export default function VoiceAssistant() {
                   isProcessing ||
                   isSummaryLoading ||
                   isTtsLoading ||
+                  (isRealTimeRecording && !!realTimeTranscript) ||
                   !!result?.transcription
                 }
                 isLoading={!result?.transcription && isProcessing}
-                cost={
-                  result?.transcription
-                    ? undefined
-                    : getRemainingCost("transcribe")
-                }
+                cost={getRemainingCost("transcribe")}
                 className="w-full sm:w-[180px]"
               >
                 Transcribe Audio

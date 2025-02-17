@@ -98,6 +98,11 @@ export default function TermsOfService() {
                   The cost of services in credits is subject to change. Any
                   changes will be reflected in our pricing page.
                 </li>
+                <li>
+                  Live transcription automatically charges 18 credits per minute
+                  of audio. This charge occurs when you stop recording, and the
+                  rate is fixed regardless of the actual audio length.
+                </li>
               </ul>
             </section>
 
