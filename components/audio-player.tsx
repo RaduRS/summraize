@@ -26,6 +26,7 @@ export function AudioPlayer({
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const playPromiseRef = useRef<Promise<void> | null>(null);
+  const srcRef = useRef<string>(src);
 
   const formatTime = (time: number) => {
     if (!time || isNaN(time) || !isFinite(time)) return "0:00";
@@ -33,6 +34,23 @@ export function AudioPlayer({
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
+
+  // Add effect to handle iOS Safari source restoration
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // Only update if src has changed
+    if (src !== srcRef.current) {
+      srcRef.current = src;
+      audio.src = src;
+
+      // For iOS Safari, ensure the source is properly set
+      if (audio.paused) {
+        audio.load();
+      }
+    }
+  }, [src]);
 
   useEffect(() => {
     const audio = audioRef.current;
