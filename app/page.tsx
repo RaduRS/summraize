@@ -12,6 +12,7 @@ import Link from "next/link";
 import { CheckCircle2, Zap, Shield, Clock } from "lucide-react";
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
+import { LMSIntegration } from "@/components/lms-integration";
 
 export default function Home() {
   const benefitsRef = useRef(null);
@@ -30,6 +31,11 @@ export default function Home() {
       {/* Main Features - Clean white background */}
       <div className="relative">
         <Features />
+      </div>
+
+      {/* LMS Integration Section */}
+      <div className="relative">
+        <LMSIntegration />
       </div>
 
       {/* Benefits Section - Subtle gray background */}

@@ -14,6 +14,7 @@ import {
   ArrowRight,
   ArrowDown,
   ArrowUp,
+  School,
 } from "lucide-react";
 import { BackgroundDecorations } from "./background-decorations";
 
@@ -34,6 +35,13 @@ const profiles = [
       "Convert study materials to audio for learning",
     ],
     href: "/document-converter",
+    additionalLinks: [
+      {
+        text: "Set up LMS Integration",
+        href: "/lms-setup",
+        icon: School,
+      },
+    ],
   },
   {
     title: "Working Professionals",
@@ -179,12 +187,23 @@ export function UserProfiles() {
 
                 <AuthButton
                   href={profile.href}
+                  className="w-full mt-auto group"
                   variant="outline"
-                  className="w-full group mt-6"
                 >
-                  Learn More
+                  Try Now
                   <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                 </AuthButton>
+
+                {profile.additionalLinks?.map((link) => (
+                  <Link
+                    key={link.text}
+                    href={link.href}
+                    className="flex items-center gap-2 mt-4 text-sm text-gray-600 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                  >
+                    <link.icon className="h-4 w-4" />
+                    {link.text}
+                  </Link>
+                ))}
               </Card>
             </motion.div>
           ))}
